@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+################################################################################
+#
+# 
+# 
+# 
+# 
+#
+# 
+# 
+# 
+# 
+#
+# 
+# 
+# 
+# 
+#
+# 
+# 
+#
+################################################################################
+-->
+<openerp>
+
+    <data noupdate="0">
+
+        <record model="ir.module.category" id="module_fnx_pd">
+            <field name="name">FnxPd</field>
+            <field name="sequence">18</field>
+            <field name="description">Production Orders</field>
+        </record>
+
+        <record model="res.groups" id="group_fnx_pd_guest">
+            <field name="name">Guest</field>
+            <field name="category_id" ref="module_fnx_pd"/>
+            <field name="comment">The user has read-only acess.</field>
+        </record>
+
+        <record model="res.groups" id="group_fnx_pd_user">
+            <field name="name">User</field>
+            <field name="category_id" ref="module_fnx_pd"/>
+            <field name="comment">The user normal access.</field>
+            <field name="implied_ids" eval="[(4, ref('group_fnx_pd_guest'))]"/>
+        </record>
+
+        <record model="res.groups" id="group_fnx_pd_manager">
+            <field name="name">Manager</field>
+            <field name="category_id" ref="module_fnx_pd"/>
+            <field name="comment">The user has manager access.</field>
+            <field name="implied_ids" eval="[(4, ref('group_fnx_pd_user'))]"/>
+            <field name="users" eval="[(4, ref('base.user_root'))]"/>
+        </record>
+
+    </data>
+
+</openerp>

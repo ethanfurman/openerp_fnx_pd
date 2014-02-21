@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+
+        <!-- Top menu item -->
+        <menuitem name="FnxPd" id="menu_fnx_pd_root" groups="group_fnx_pd_manager,group_fnx_pd_user,group_fnx_pd_guest"/>
+
+        <record model="ir.ui.view" id="fnx_pd_order_tree">
+            <field name="name">fnx_pd_order_tree</field>
+            <field name="model">fnx.pd.order</field>
+            <field name="priority" eval="10"/>
+            <field name="arch" type="xml">
+                <tree string="Tree View" toolbar="1" create="false">
+                    <field name="order_no"/>
+                    <field name="item_id"/>
+                    <field name="qty"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="fnx_pd_order_form">
+            <field name="name">fnx_pd_order_form</field>
+            <field name="model">fnx.pd.order</field>
+            <field name="priority" eval="10"/>
+            <field name="arch" type="xml">
+                <form string="Production Orders" version="7.0" create="false">
+                    <header>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,scheduled,ready,complete" />
+                    </header>
+                    <sheet>
+                        <group>
+                            <group>
+                                <div>
+                                    <h1>
+                                        <field name="order_no" attrs="{'readonly':True}"/>
+                                    </h1>
+                                    <h2>
+                                        <field name="item_id" attrs="{'readonly':True}"/>
+                                    </h2>
+                                </div>
+                                <div class="oe_right oe_button_box">
+                                    <button string="Start Job" groups="fnx_pd.group_fnx_pd_user" name="pd_checkin" states="ready" type="object"/>
+                                    <button string="Job Finished" groups="fnx_pd.group_fnx_pd_user" name="pd_complete" states="running" type="object"/>
+                                </div>
+                                <field name="confirmed"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group>
+                                <field name="coating" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <field name="allergens" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                            </group>
+                            <group>
+                                <field name="dept" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <field name="line" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                            </group>
+                            <group>
+                                <field name="qty"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Production Runs">
+                                <field name="schedule_ids" nolabel="1" readwrite="groups('fnx_pd.group_fnx_pd_user')"/>
+                            </page>
+                            <page string="Manager Overrides" visible="groups('fnx_pd.group_fnx_pd_manager')">
+                                <separator string="Reset state to"/>
+                                <button string="Unscheduled" name="pd_draft" type="object" context="{'manager_override':True}"/>
+                                <button string="Ready" name="pd_ready" type="object" context="{'manager_override':True}"/>
+                                <button string="Running" name="pd_start" type="object" context="{'manager_override':True}"/>
+                                <button string="Complete" name="pd_complete" type="object" context="{'manager_override':True}"/>
+                                <button string="Cancelled" name="pd_cancel" type="object" context="{'manager_override':True}"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids" widget="mail_followers"/>
+                        <field name="message_ids" widget="mail_thread" nolabel="1" />
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="search_fnx_pd_orders">
+            <field name="name">Production Orders Search</field>
+            <field name="model">fnx.pd.order</field>
+            <field name="arch" type="xml">
+                <search string="Search Production Orders">
+                    <field name="state" string="Status" />
+                    <field name="item_id" string="Product" />
+                    <field name="coating" string="Coating" />
+                    <field name="allergens" string="Allergens" />
+                    <separator/>
+                    <filter string="Unscheduled" name="type_draft" domain="[('state','=','draft')]"/>
+                    <filter string="Scheduled" name="type_scheduled" domain="[('state','=','scheduled')]"/>
+                    <filter string="Ready, Needs Schedule" name="type_need_schedule" domain="[('state','=','needs_schedule')]"/>
+                    <filter string="Partially Scheduled" name="type_partial" domain="[('state','=','partial')]"/>
+                    <filter string="Ready" name="type_ready" domain="[('state','=','ready')]"/>
+                    <filter string="In Progress" name="type_running" domain="[('state','=','running')]"/>
+                    <separator/>
+                    <group expand="0" string="Group by...">
+                        <filter string="Allergens" domain="[]" context="{'group_by': 'allergens'}"/>
+                        <filter string="Coating" domain="[]" context="{'group_by': 'coating'}"/>
+                        <filter string="Department" domain="[]" context="{'group_by': 'dept'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record model="ir.actions.act_window" id="action_fnx_pd_form_orders">
+            <field name="name">Orders</field>
+            <field name="res_model">fnx.pd.order</field>
+            <field name="view_type">form</field>
+            <field name="view_id" ref="fnx_pd_order_tree"/>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="search_fnx_pd_orders"/>
+            <field name="limit" eval="200"/>
+        </record>
+        <menuitem
+            name="Orders"
+            id="menu_fnx_pd_orders"
+            parent="menu_fnx_pd_root"
+            sequence="10"
+            />
+
+        <menuitem
+            name="All Orders"
+            id="menu_item_fnx_pd_orders_all"
+            parent="menu_fnx_pd_orders"
+            sequence="40"
+            action="action_fnx_pd_form_orders"
+            />
+
+        <record model="ir.ui.view" id="fnx_pd_schedule_tree">
+            <field name="name">fnx_pd_schedule_tree</field>
+            <field name="model">fnx.pd.schedule</field>
+            <field name="priority" eval="10"/>
+            <field name="arch" type="xml">
+                <tree string="Tree View" toolbar="1" create="false">
+                    <field name="line_id"/>
+                    <field name="order_id"/>
+                    <field name="schedule_date"/>
+                    <field name="schedule_seq"/>
+                    <field name="qty"/>
+                </tree>
+            </field>
+        </record>
+
+
+        <record model="ir.ui.view" id="search_fnx_pd_schedules">
+            <field name="name">Production Schedule Search</field>
+            <field name="model">fnx.pd.schedule</field>
+            <field name="arch" type="xml">
+                <search string="Search Production Orders">
+                    <field name="order_id" string="Orders" />
+                    <field name="schedule_date" string="Dates" />
+                    <field name="line_id" string="Production Line" />
+                    <separator/>
+                    <group expand="0" string="Group by...">
+                        <filter string="Date" domain="[]" context="{'group_by': 'schedule_date'}"/>
+                        <filter string="Production Line" domain="[]" context="{'group_by': 'line_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record model="ir.actions.act_window" id="action_fnx_pd_tree_schedules">
+            <field name="name">Schedules</field>
+            <field name="res_model">fnx.pd.schedule</field>
+            <field name="view_type">form</field>
+            <field name="view_id" ref="fnx_pd_schedule_tree"/>
+            <field name="view_mode">tree</field>
+            <field name="search_view_id" ref="search_fnx_pd_schedules"/>
+            <field name="limit" eval="200"/>
+        </record>
+        <menuitem
+            name="Schedules"
+            id="menu_fnx_pd_schedules"
+            parent="menu_fnx_pd_root"
+            sequence="10"
+            />
+
+        <menuitem
+            name="All Orders"
+            id="menu_item_fnx_pd_schedules_all"
+            parent="menu_fnx_pd_schedules"
+            sequence="40"
+            action="action_fnx_pd_tree_schedules"
+            />
+
+    </data>
+</openerp>
