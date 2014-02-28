@@ -4,7 +4,7 @@ from itertools import groupby
 from openerp.osv import fields, osv
 from openerp.tools import float_compare, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
 from openerp.tools.translate import _
-from fnx import Date, DateTime, Time, float, get_user_timezone, all_equal, PropertyDict
+from fnx import Date, DateTime, Time, float, get_user_timezone, all_equal, PropertyDict, Proposed
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class fnx_pd_order(osv.Model):
     _name = 'fnx.pd.order'
     _description = 'production order'
     _inherit = ['mail.thread']
-    #_order = 'appointment_date asc, appointment_order asc, state desc'
+    _order = 'order_no asc'
     _rec_name = 'order_no'
     _mail_flat_thread = False
     
@@ -373,14 +373,32 @@ class fnx_pd_schedule(osv.Model):
         #'state': fields.
     }
 
-    def _insert_order_in_sequence(self, cr, uid, id, date, new_seq, context=None):
+    def _insert_order_in_sequence(self, cr, uid, id, proposed, context=None):
         if context is None:
             context = {}
+        if isinstance(proposed.line_id, int):
+            line_id = proposed.line_id
+        else:
+            line_id = proposed.line_id.id
         days_orders = self.browse(cr, uid,
-                self.search(cr, uid, [('schedule_date','=',date),('schedule_seq','=',new_seq)], context=context),
+                self.search(cr, uid, [
+                    ('line_id','=',line_id),
+                    ('schedule_date','=',proposed.schedule_date),
+                    ('schedule_seq','=',proposed.schedule_seq),
+                    ], context=context),
                 context=context)
         for order in days_orders:  # either zero or one order
-            self.write(cr, uid, [order.id], values={'schedule_seq':new_seq+1}, context=context)
+            self.write(cr, uid, [order.id], values={'schedule_seq':proposed.schedule_seq+1}, context=context)
+
+    def _sum_order_quantities(self, cr, uid, current, proposed, context=None):
+        if context is None:
+            context = {}
+        records = self.browse(cr, uid,
+                self.search(cr, uid, [('order_id','=',proposed.order_id.id)], context=context),
+                context=context)
+        current_total = sum([rec.qty for rec in records])
+        new_total = current_total - current.qty + proposed.qty
+        return new_total
 
     def write(self, cr, uid, ids, values, context=None):
         if ids:
@@ -388,15 +406,28 @@ class fnx_pd_schedule(osv.Model):
                 ids = [ids]
             if context is None:
                 context = {}
-            values = PropertyDict(values)
-            if values.schedule_seq:
+            current = self.browse(cr, uid, ids[0], context=context)
+            master = current.order_id
+            new_values = Proposed(self, values)
+            proposed = Proposed(self, values, current)
+            if new_values.schedule_seq:
                 if len(ids) > 1:
                     raise osv.except_osv('Error', 'Cannot set multiple records to the same non-zero sequence')
-                # push  down any other orders of the same sequence
-                current = self.browse(cr, uid, ids[0], context=context)
-                self._insert_order_in_sequence(cr, uid, ids[0],
-                        values.get('schedule_date') or current.schedule_date,
-                        values.schedule_seq, context)
+                # push down any other orders of the same sequence
+                self._insert_order_in_sequence(cr, uid, ids[0], proposed, context)
+            if new_values.qty:
+                new_total = self._sum_order_quantities(cr, uid, current, proposed, context=context)
+                if new_total > master.qty:
+                    raise osv.except_osv('Error', 'New total if %d is more than order calls for (%d)' % (new_total, master.qty))
+                # create new schedule entry to cover the difference
+                new_qty = master.qty - new_total
+                self.create(cr, uid, dict(
+                    name=proposed.name,
+                    order_id=proposed.order_id.id,
+                    schedule_date=proposed.schedule_date,
+                    schedule_seq=0,
+                    line_id=proposed.line_id.id,
+                    qty=new_qty,
+                    ), context=context)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
 fnx_pd_schedule()
-
