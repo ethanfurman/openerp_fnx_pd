@@ -16,10 +16,12 @@
             'crm',
             'fis_integration',
             'fnx',
+            'product',
         ],
     'data': [
             'security/security.xml',
             'security/ir.model.access.csv',
+            'product_view.xml',
             'production_view.xml',
         ],
     'test': [],

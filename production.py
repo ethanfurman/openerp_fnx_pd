@@ -4,7 +4,7 @@ from itertools import groupby
 from openerp.osv import fields, osv
 from openerp.tools import float_compare, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
 from openerp.tools.translate import _
-from fnx import Date, DateTime, Time, float, get_user_timezone, all_equal
+from fnx import Date, DateTime, Time, float, get_user_timezone, all_equal, PropertyDict
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -64,25 +64,35 @@ class fnx_pd_order(osv.Model):
     def create(self, cr, uid, values, context=None):
         if context == None:
             context = {}
-        chat_context = context.copy()
         res_partner = self.pool.get('res.partner')
         res_users = self.pool.get('res.users')
         product_product = self.pool.get('product.product')
-        chat_context['mail_create_nolog'] = True
-        chat_context['mail_create_nosubscribe'] = True
+        fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+        context['mail_create_nolog'] = True
+        context['mail_create_nosubscribe'] = True
         follower_ids = values.pop('follower_ids')
         product = product_product.browse(cr, uid, values['item_id'])
         product_follower_ids = [p.id for p in (product.message_follower_ids or [])]
-        user_follower_ids = res_users.search(cr, uid, [('partner_id','in',follower_ids),('id','!=',1)])
+        user_follower_ids = res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)])
         user_follower_records = res_users.browse(cr, uid, user_follower_ids)
-        partner_follower_ids = [u.partner_id.id for u in user_follower_records]
+        product_follower_ids = [u.partner_id.id for u in user_follower_records]
         date = values.pop('date')
         new_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
-        if user_follower_ids:
+        current = self.browse(cr, uid, new_id, context=context)
+        # create scehdule entry
+        sched_vals = {
+                'name': '%s - [%s] %s' % (current.order_no, current.item_id.xml_id, current.item_id.name),
+                'schedule_date': date,
+                'qty': current.qty,
+                'order_id': new_id,
+                }
+        sched_id = fnx_pd_schedule.create(cr, uid, sched_vals, context=context)
+        # create comments
+        if product_follower_ids:
             self.message_post(
                     cr, uid, new_id,
                     body="order added to the system",
-                    partner_ids=partner_follower_ids,
+                    partner_ids=product_follower_ids,
                     subtype='mt_comment',
                     context=context,
                     )
@@ -92,96 +102,55 @@ class fnx_pd_order(osv.Model):
             self.message_subscribe_users(cr, uid, [new_id], user_ids=follower_ids, context=context)
         return new_id
 
-#    def create(self, cr, uid, values, context=None):
-#        if context == None:
-#            context = {}
-#        res_partner = self.pool.get('res.partner')
-#        res_users = self.pool.get('res.users')
-#        if 'carrier_id' not in values or not values['carrier_id']:
-#            values['carrier_id'] = res_partner.search(cr, uid, [('xml_id','=','99'),('module','=','F27')])[0]
-#        if 'partner_id' not in values or not values['partner_id']:
-#            raise ValueError('partner not specified')
-#        context['mail_create_nolog'] = True
-#        context['mail_create_nosubscribe'] = True
-#        partner = res_partner.browse(cr, uid, values['partner_id'])
-#        partner_follower_ids = [p.id for p in partner.message_follower_ids]
-#        user_follower_ids = res_users.search(cr, uid, [('partner_id','in',partner_follower_ids),('id','!=',1)])
-#        user_follower_records = res_users.browse(cr, uid, user_follower_ids)
-#        partner_follower_ids = [u.partner_id.id for u in user_follower_records]
-#        real_id = values.pop('real_id', None)
-#        real_name = None
-#        direction = DIRECTION[values['direction']].title()
-#        body = '%s order created' % direction
-#        follower_ids = values.pop('local_contact_ids', [])
-#        follower_ids.extend(user_follower_ids)
-#        if real_id:
-#            values['local_contact_id'] = real_id #res_users.browse(cr, uid, real_id, context=context)
-#            follower_ids.append(real_id)
-#            real_name = res_users.browse(cr, uid, real_id, context=context).partner_id.name
-#            body = 'Order received from %s %s' % ({'Purchase':'Purchaser', 'Sale':'Sales Rep'}[direction], real_name)
-#        if 'appointment_date' in values:
-#            try:
-#                appt = Date.fromymd(values['appointment_date'])
-#            except ValueError:
-#                appt = Date.fromymd(values['appointment_date'][:-2] + '01')
-#                appt = appt.replace(delta_month=1)
-#                values['appointment_date'] = appt.ymd()
-#        new_id = super(fnx_sr_shipping, self).create(cr, uid, values, context=context)
-#        if user_follower_ids:
-#            self.message_post(cr, uid, new_id, body=body, partner_ids=partner_follower_ids, subtype='mt_comment', context=context)
-#        else:
-#            self.message_post(cr, uid, new_id, body=body, context=context)
-#        if follower_ids:
-#            self.message_subscribe_users(cr, uid, [new_id], user_ids=follower_ids, context=context)
-#        return new_id
-#
-#    def write(self, cr, uid, id, values, context=None):
-#        if context is None:
-#            context = {}
-#        context['mail_create_nolog'] = True
-#        context['mail_create_nosubscribe'] = True
-#        state = None
-#        follower_ids = values.pop('local_contact_ids', [])
-#        login_id = values.pop('login_id', None)
-#        real_name = None
-#        if login_id:
-#            res_users = self.pool.get('res.users')
-#            partner = res_users.browse(cr, uid, login_id, context=context).partner_id
-#            values['local_contact_id'] = partner.id
-#            follower_ids.append(login_id)
-#        if not context.pop('from_workflow', False):
-#            state = values.pop('state', None)
-#        result = super(fnx_sr_shipping, self).write(cr, uid, id, values, context=context)
-#        if 'appointment_time' in values:
-#            self.sr_schedule(cr, uid, id, context=context)
-#        if state is not None:
-#            wf = self.WORKFLOW[state]
-#            wf(self, cr, uid, id, context=context)
-#        if follower_ids:
-#            self.message_subscribe_users(cr, uid, id, user_ids=follower_ids, context=context)
-#        return result
-#
-#    def sr_draft(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        context['from_workflow'] = True
-#        override = context.get('manager_override')
-#        values = {'state':'draft'}
-#        if override:
-#            values['appointment_time'] = 0.0
-#            values['appt_confirmed'] = False
-#            values['appt_confirmed_on'] = False
-#            values['appt_scheduled_by_id'] = False
-#            values['check_in'] = False
-#            values['check_out'] = False
-#        if self.write(cr, uid, ids, values, context=context):
-#            if override:
-#                context['mail_create_nosubscribe'] = True
-#                self.message_post(cr, uid, ids, body="Reset to draft", context=context)
-#            return True
-#        return False
-#
-#    def sr_schedule(self, cr, uid, ids, context=None):
+    def write(self, cr, uid, id, values, context=None):
+        if context is None:
+            context = {}
+        context['mail_create_nolog'] = True
+        context['mail_create_nosubscribe'] = True
+        follower_ids = values.pop('follower_ids', [])
+        date = values.pop('date', None)
+        state = None
+        if not context.pop('from_workflow', False):
+            state = values.pop('state', None)
+        result = super(fnx_pd_order, self).write(cr, uid, id, values, context=context)
+        if state is not None:
+            wf = self.WORKFLOW[state]
+            wf(self, cr, uid, id, context=context)
+        if follower_ids:
+            self.message_subscribe_users(cr, uid, [id], user_ids=follower_ids, context=context)
+        return result
+
+    def pd_draft(self, cr, uid, ids, context=None):
+        if context is None:
+            context = {}
+        context['from_workflow'] = True
+        override = context.get('manager_override')
+        values = {'state':'draft'}
+        if override:
+            values['appointment_time'] = 0.0
+            values['appt_confirmed'] = False
+            values['appt_confirmed_on'] = False
+            values['appt_scheduled_by_id'] = False
+            values['check_in'] = False
+            values['check_out'] = False
+        if self.write(cr, uid, ids, values, context=context):
+            if override:
+                context['mail_create_nosubscribe'] = True
+                self.message_post(cr, uid, ids, body="Reset to draft", context=context)
+            return True
+        return False
+
+    WORKFLOW = {
+        'draft': pd_draft,
+        #'scheduled': pd_schedule,
+        #'appt': pd_appointment,
+        #'ready': pd_ready,
+        #'checked_in': pd_checkin,
+        #'complete': pd_complete,
+        #'cancelled': pd_cancel,
+        }
+
+#    def pd_schedule(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -218,7 +187,7 @@ class fnx_pd_order(osv.Model):
 #                return True
 #        return False
 #
-#    def sr_appointment(self, cr, uid, ids, context=None):
+#    def pd_appointment(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -242,7 +211,7 @@ class fnx_pd_order(osv.Model):
 #            return True
 #        return False
 #
-#    def sr_ready(self, cr, uid, ids, context=None):
+#    def pd_ready(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -265,7 +234,7 @@ class fnx_pd_order(osv.Model):
 #            return True
 #        return False
 #
-#    def sr_checkin(self, cr, uid, ids, context=None):
+#    def pd_checkin(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -294,7 +263,7 @@ class fnx_pd_order(osv.Model):
 #            return True
 #        return False
 #
-#    def sr_complete(self, cr, uid, ids, context=None):
+#    def pd_complete(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -329,7 +298,7 @@ class fnx_pd_order(osv.Model):
 #                self.message_post(cr, uid, id, body=message, subtype='mt_comment', partner_ids=followers, context=context)
 #        return True
 #
-#    def sr_cancel(self, cr, uid, ids, context=None):
+#    def pd_cancel(self, cr, uid, ids, context=None):
 #        if context is None:
 #            context = {}
 #        if isinstance(ids, (int, long)):
@@ -384,7 +353,7 @@ class fnx_pd_order(osv.Model):
 #                new_args.append(['date', op, last.strftime('%Y-%m-%d')])
 #            else:
 #                raise ValueError('unable to process domain: %r' % arg)
-#        return super(fnx_sr_shipping, self).search(cr, user, args=new_args, offset=offset, limit=limit, order=order, context=context, count=count)
+#        return super(fnx_pd_order, self).search(cr, user, args=new_args, offset=offset, limit=limit, order=order, context=context, count=count)
 
 fnx_pd_order()
 
@@ -392,18 +361,42 @@ fnx_pd_order()
 class fnx_pd_schedule(osv.Model):
     _name = 'fnx.pd.schedule'
     _description = 'production schedule'
-    _order = 'scheduled_date desc, scheduled_seq asc'
-
-    def _getname(self, cr, uid, ids, field_name, field_value, arg, context=None):
-        pass
+    _order = 'schedule_date asc, schedule_seq asc'
 
     _columns= {
-        'name': fields.function(_getname, method=True, store=True, string="Order / Product"),
-        'order_id': fields.one2many('fnx.pd.order', 'order_no', 'Order'),
+        'name': fields.char(string="Order / Product", size=64),
+        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
         'schedule_date': fields.date('Scheduled for'),
         'schedule_seq': fields.integer('Sequence'),
         'line_id': fields.many2one('cmms.line', 'Production Line'),
         'qty': fields.integer('Quantity'),
+        #'state': fields.
     }
+
+    def _insert_order_in_sequence(self, cr, uid, id, date, new_seq, context=None):
+        if context is None:
+            context = {}
+        days_orders = self.browse(cr, uid,
+                self.search(cr, uid, [('schedule_date','=',date),('schedule_seq','=',new_seq)], context=context),
+                context=context)
+        for order in days_orders:  # either zero or one order
+            self.write(cr, uid, [order.id], values={'schedule_seq':new_seq+1}, context=context)
+
+    def write(self, cr, uid, ids, values, context=None):
+        if ids:
+            if isinstance(ids, (int, long)):
+                ids = [ids]
+            if context is None:
+                context = {}
+            values = PropertyDict(values)
+            if values.schedule_seq:
+                if len(ids) > 1:
+                    raise osv.except_osv('Error', 'Cannot set multiple records to the same non-zero sequence')
+                # push  down any other orders of the same sequence
+                current = self.browse(cr, uid, ids[0], context=context)
+                self._insert_order_in_sequence(cr, uid, ids[0],
+                        values.get('schedule_date') or current.schedule_date,
+                        values.schedule_seq, context)
+        return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
 fnx_pd_schedule()
 

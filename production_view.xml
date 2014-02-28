@@ -136,9 +136,9 @@
             <field name="model">fnx.pd.schedule</field>
             <field name="priority" eval="10"/>
             <field name="arch" type="xml">
-                <tree string="Tree View" toolbar="1" create="false">
+                <tree string="Tree View" toolbar="1" create="false" editable="bottom">
                     <field name="line_id"/>
-                    <field name="order_id"/>
+                    <field name="order_id" readonly="True"/>
                     <field name="schedule_date"/>
                     <field name="schedule_seq"/>
                     <field name="qty"/>

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<openerp>
+    <data>
+
+        <!-- Add fnx.pd.order tab to product.product -->
+        <record id="product_normal_form_view_fnx_pd" model="ir.ui.view">
+                <field name="name">view.product.product.form.fnx_pd</field>
+                <field name="model">product.product</field>
+                <field name="inherit_id" ref="stock.view_normal_procurement_locations_form"/>
+                <field eval="7" name="priority"/>
+                <field name="arch" type="xml">
+                    <xpath expr="//group[@name='inventory']" position="after">
+                        <group string="Production Orders">
+                            <field name="prod_order_ids" colspan="4" nolabel="1"/>
+                        </group>
+                    </xpath>
+                </field>
+        </record>
+
+    </data>
+</openerp>
