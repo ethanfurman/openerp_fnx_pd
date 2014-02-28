@@ -6,7 +6,8 @@ from syslog import syslog
 from VSS import Date, fix_date
 from VSS.openerp import get_records
 from VSS.path import Path, listdir, glob
-from VSS.utils import PropertyDict, ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum
+from VSS.time_machine import PropertyDict
+from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
 import openerplib
 import shutil
@@ -18,8 +19,6 @@ ERRORS = Path('/var/openerp/archive/production/error')
 USER_PW_DB = Path('/etc/openerp/credentials')
 
 execfile(USER_PW_DB)
-
-OE = PropertyDict()
 
 module = {
     'incoming': 'F163',
@@ -58,15 +57,13 @@ def archive(src_file, dest=ARCHIVE):
         dst_file += '_%02d' % count
     shutil.move(src_file, dst_file)
 
-def connect_oe(hostname, database, user, password):
+def connect(hostname, database, user, password):
+    OE = PropertyDict()
     OE.conn = conn = openerplib.get_connection(hostname=hostname, database=database, login=user, password=password)
-    OE.product_product = conn.get_model('product.product')
-    OE.res_partner = conn.get_model('res.partner')
-    OE.res_users = conn.get_model('res.users')
-    OE.fnx_pd_order = conn.get_model('fnx.pd.order')
+    return OE
 
 def get_files(source=SOURCE):
-    files = [SOURCE/f for f in SOURCE.listdir() if f != 'order_template']
+    files = [source/f for f in source.listdir() if f != 'order_template']
     files.sort(key=lambda f: f.stat().st_mtime)
     return files
 
@@ -75,14 +72,17 @@ def get_order(order):
     execfile(order, g)
     return PropertyDict(g['order'])
 
-def import_spreadsheet(file_name):
+def import_spreadsheet(OE, file_name):
     errors = []
     with open_workbook(file_name) as work_book:
         sheet = work_book[2]
-        for row in sheet.rows(start_row=1):
-            followers = get_records(OE.res_users, fields=['id'], domain=[('login','=',row[email])], max_qty=1)
-            followers = [rec.id for rec in followers]
-            item = get_records(OE.product_product, fields=['id'], domain=[('xml_id','=',row[item_code])], max_qty=1)
+        last_row = None
+        for row in sheet.rows(start_row=1, end_row=100):
+            if row == last_row:
+                continue
+            followers = get_records(OE, 'res.users', fields=['id'], domain=[('login','=',row[email])], max_qty=1)
+            followers = [rec.id for rec in followers] or False
+            item = get_records(OE, 'product.product', fields=['id'], domain=[('xml_id','=',row[item_code])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
                 errors.append('order %s: product %s not found' % (row[order_num], row[item_code]))
@@ -96,10 +96,13 @@ def import_spreadsheet(file_name):
             data.order_no = row[order_num]
             data.confirmed = row[confirmed] == 'Y'
             data.qty = int(ceil(float(row[qty])))
-            data.date = str(fix_date(row[date], format='ymd'))
+            sched_date = fix_date(row[date], format='ymd')
+            if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                continue
+            data.date = str(sched_date)
             data.coating = row[coating]
             data.allergens = row[allergens]
-            current_record = get_records(OE.fnx_pd_order, domain=[('order_no','=',data.order_no)], max_qty=1)
+            current_record = get_records(OE, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_record:
                 current_record = current_record[0]
                 OE.fnx_pd_order.write(current_record.id, dict(data))
@@ -121,7 +124,7 @@ def update_order(values):
 def manual_update(hostname='localhost', db=DB, login=USER, password=None, **values):
     if password is None:
         password = PW
-    connect_oe(hostname, db, login, password)
+    OE = connect(hostname, db, login, password)
     pass
 
 @Command(
@@ -139,14 +142,15 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
         files = [file_to_process]
     else:
         files = [f for f in get_files() if f.ext == '.xls']
-    connect_oe(hostname, db, login, password)
+    OE = connect(hostname, db, login, password)
+    OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     retry = []
     failed = []
     for group in ((files, failed), ):
         time.sleep(5)
         trying, failing = group
         for file in trying:
-            errors = import_spreadsheet(file)
+            errors = import_spreadsheet(OE, file)
             if errors:
                 raise ValueError("Unable to process orders:\n\t%s" % '\n\t'.join(errors))
             #archive(file, dest)
