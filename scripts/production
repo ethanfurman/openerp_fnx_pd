@@ -74,6 +74,7 @@ def get_order(order):
 
 def import_spreadsheet(OE, file_name):
     errors = []
+    orders_imported = []   # list of imported current orders so that non-current orders still on file can be flagged completed
     with open_workbook(file_name) as work_book:
         sheet = work_book[2]
         last_row = None
@@ -99,6 +100,7 @@ def import_spreadsheet(OE, file_name):
             sched_date = fix_date(row[date], format='ymd')
             if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                 continue
+            orders_imported.append(data.order_no)
             data.date = str(sched_date)
             data.coating = row[coating]
             data.allergens = row[allergens]
@@ -108,7 +110,13 @@ def import_spreadsheet(OE, file_name):
                 OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
                 OE.fnx_pd_order.create(dict(data))
+    open_pd_ords = get_records(OE,'fnx.pd.order', domain=[('state','!=','complete')])
+    #import pdb; pdb.set_trace()
+    for ii in open_pd_ords:
+        if ii.order_no not in orders_imported:
+            OE.fnx_pd_order.write(ii.id,{'state':'complete'})
     return errors
+
 
 def update_order(values):
     pass
