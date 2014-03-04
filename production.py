@@ -140,15 +140,7 @@ class fnx_pd_order(osv.Model):
             return True
         return False
 
-    WORKFLOW = {
-        'draft': pd_draft,
-        #'scheduled': pd_schedule,
-        #'appt': pd_appointment,
-        #'ready': pd_ready,
-        #'checked_in': pd_checkin,
-        #'complete': pd_complete,
-        #'cancelled': pd_cancel,
-        }
+    def NOOP(*args,**kwargs):return False
 
 #    def pd_schedule(self, cr, uid, ids, context=None):
 #        if context is None:
@@ -263,40 +255,26 @@ class fnx_pd_order(osv.Model):
 #            return True
 #        return False
 #
-#    def pd_complete(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        if len(ids) > 1:
-#            # check all have the same carrier
-#            records = self.browse(cr, uid, ids, context=context)
-#            carrier_ids = [r.carrier_id.id for r in records]
-#            if not all_equal(carrier_ids):
-#                raise osv.except_osv('Error', 'Not all carriers are the same, unable to process')
-#        context['from_workflow'] = True
-#        override = context.get('manager_override')
-#        order_update = context.get('order_update')
-#        values = {'state':'complete'}
-#        if not order_update:
-#            values['check_out'] = DateTime.now()
-#            body = 'Driver checked out at %s' % values['check_out']
-#        for id in ids:
-#            current = self.browse(cr, uid, id, context=context)
-#            if override:
-#                values['check_out'] = current.check_out or False
-#                body = 'Reset to Complete.'
-#            if self.write(cr, uid, id, values, context=context):
-#                context['mail_create_nosubscribe'] = True
-#                followers = self._get_followers(cr, uid, [id], None, None, context=context)[id]['message_follower_ids']
-#                if not order_update:
-#                    self.message_post(cr, uid, id, body=body, context=context)
-#                if current.direction == 'incoming':
-#                    message = 'Complete:  received from %s.' % current.partner_id.name
-#                else:
-#                    message = 'Complete:  shipped to %s.' % current.partner_id.name
-#                self.message_post(cr, uid, id, body=message, subtype='mt_comment', partner_ids=followers, context=context)
-#        return True
+    def pd_complete(self, cr, uid, ids, context=None):
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        override = context.get('manager_override')
+        order_update = context.get('order_update')
+        values = {'state':'complete'}
+        if not order_update:
+            values['check_out'] = DateTime.now()
+            body = 'Order complete.'
+        fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+        for id in ids:
+            current = self.browse(cr, uid, id, context=context)
+            if override:
+                body = 'Reset to Complete.'
+            if self.write(cr, uid, id, values, context=context):
+                context['mail_create_nosubscribe'] = True
+        return True
 #
 #    def pd_cancel(self, cr, uid, ids, context=None):
 #        if context is None:
@@ -354,6 +332,18 @@ class fnx_pd_order(osv.Model):
 #            else:
 #                raise ValueError('unable to process domain: %r' % arg)
 #        return super(fnx_pd_order, self).search(cr, user, args=new_args, offset=offset, limit=limit, order=order, context=context, count=count)
+
+    WORKFLOW = {
+        'draft': pd_draft,
+        #'scheduled': pd_schedule,
+        #'appt': pd_appointment,
+        #'ready': pd_ready,
+        #'checked_in': pd_checkin,
+        #'complete': NOOP,
+        'complete': pd_complete,
+        #'cancelled': pd_cancel,
+        }
+
 
 fnx_pd_order()
 
