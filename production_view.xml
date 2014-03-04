@@ -155,8 +155,10 @@
                     <field name="order_id" string="Orders" />
                     <field name="schedule_date" string="Dates" />
                     <field name="line_id" string="Production Line" />
+                    <field name="order_status" string="Order State" />
                     <separator/>
                     <group expand="0" string="Group by...">
+                        <filder string="Active" domain="[('order_status','!=',['complete','cancelled'])]"/>
                         <filter string="Date" domain="[]" context="{'group_by': 'schedule_date'}"/>
                         <filter string="Production Line" domain="[]" context="{'group_by': 'line_id'}"/>
                     </group>
@@ -178,6 +180,14 @@
             id="menu_fnx_pd_schedules"
             parent="menu_fnx_pd_root"
             sequence="10"
+            />
+
+        <menuitem
+            name="Active Orders"
+            id="menu_item_fnx_pd_schedules_active"
+            parent="menu_fnx_pd_schedules"
+            sequence="10"
+            action="action_fnx_pd_tree_schedules"
             />
 
         <menuitem

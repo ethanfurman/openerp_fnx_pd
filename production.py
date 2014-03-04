@@ -353,6 +353,19 @@ class fnx_pd_schedule(osv.Model):
     _description = 'production schedule'
     _order = 'schedule_date asc, schedule_seq asc'
 
+    def _order_status(self, cr, uid, ids, field_names=None, args=None, context=None):
+        if context = None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        fnx_pd_order = self.pool.get('fnx.pd.order')
+        values = {}
+        for record in self.browse(cr, uid, ids, context=context):
+            current = values[record.id] = {}
+            master = fnx_pd_order.browse(cr, uid, current.order_id, context=context)
+            current['order_status'] = master.state
+        return values
+
     _columns= {
         'name': fields.char(string="Order / Product", size=64),
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
@@ -360,7 +373,12 @@ class fnx_pd_schedule(osv.Model):
         'schedule_seq': fields.integer('Sequence'),
         'line_id': fields.many2one('cmms.line', 'Production Line'),
         'qty': fields.integer('Quantity'),
-        #'state': fields.
+        'order_status': fields.function(
+            _order_status,
+            type='char',
+            method=True,
+            store=True,
+            ),
     }
 
     def _insert_order_in_sequence(self, cr, uid, id, proposed, context=None):
