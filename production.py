@@ -354,16 +354,13 @@ class fnx_pd_schedule(osv.Model):
     _order = 'schedule_date asc, schedule_seq asc'
 
     def _order_status(self, cr, uid, ids, field_names=None, args=None, context=None):
-        if context = None:
+        if context == None:
             context = {}
         if isinstance(ids, (int, long)):
             ids = [ids]
-        fnx_pd_order = self.pool.get('fnx.pd.order')
         values = {}
         for record in self.browse(cr, uid, ids, context=context):
-            current = values[record.id] = {}
-            master = fnx_pd_order.browse(cr, uid, current.order_id, context=context)
-            current['order_status'] = master.state
+            values[record.id] = record.order_id.state
         return values
 
     _columns= {
@@ -378,6 +375,7 @@ class fnx_pd_schedule(osv.Model):
             type='char',
             method=True,
             store=True,
+            string='Order State',
             ),
     }
 
