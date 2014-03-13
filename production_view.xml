@@ -116,6 +116,7 @@
             <field name="search_view_id" ref="search_fnx_pd_orders"/>
             <field name="limit" eval="200"/>
         </record>
+
         <menuitem
             name="Orders"
             id="menu_fnx_pd_orders"
@@ -137,11 +138,11 @@
             <field name="priority" eval="10"/>
             <field name="arch" type="xml">
                 <tree string="Tree View" toolbar="1" create="false" editable="bottom">
-                    <field name="line_id"/>
+                    <field name="line_id" readonly="check_context_readonly()"/>
                     <field name="order_id" readonly="True"/>
-                    <field name="schedule_date"/>
-                    <field name="schedule_seq"/>
-                    <field name="qty"/>
+                    <field name="schedule_date" readonly="check_context_readonly()"/>
+                    <field name="schedule_seq" readonly="check_context_readonly()"/>
+                    <field name="qty" readonly="check_context_readonly()"/>
                 </tree>
             </field>
         </record>
@@ -158,7 +159,6 @@
                     <field name="order_status" string="Order State" />
                     <separator/>
                     <group expand="0" string="Group by...">
-                        <filder string="Active" domain="[('order_status','!=',['complete','cancelled'])]"/>
                         <filter string="Date" domain="[]" context="{'group_by': 'schedule_date'}"/>
                         <filter string="Production Line" domain="[]" context="{'group_by': 'line_id'}"/>
                     </group>
@@ -172,9 +172,23 @@
             <field name="view_type">form</field>
             <field name="view_id" ref="fnx_pd_schedule_tree"/>
             <field name="view_mode">tree</field>
+            <field name="domain">[('order_status','in',['cancelled','complete'])]</field>
+            <field name="context">{'readonly':True}</field>
             <field name="search_view_id" ref="search_fnx_pd_schedules"/>
-            <field name="limit" eval="200"/>
+            <field name="limit" eval="500"/>
         </record>
+
+        <record model="ir.actions.act_window" id="action_fnx_pd_active_tree_schedules">
+            <field name="name">Schedules</field>
+            <field name="res_model">fnx.pd.schedule</field>
+            <field name="view_type">form</field>
+            <field name="view_id" ref="fnx_pd_schedule_tree"/>
+            <field name="view_mode">tree</field>
+            <field name="domain">[('order_status','not in',['cancelled','complete'])]</field>
+            <field name="search_view_id" ref="search_fnx_pd_schedules"/>
+            <field name="limit" eval="500"/>
+        </record>
+
         <menuitem
             name="Schedules"
             id="menu_fnx_pd_schedules"
@@ -187,11 +201,11 @@
             id="menu_item_fnx_pd_schedules_active"
             parent="menu_fnx_pd_schedules"
             sequence="10"
-            action="action_fnx_pd_tree_schedules"
+            action="action_fnx_pd_active_tree_schedules"
             />
 
         <menuitem
-            name="All Orders"
+            name="Completed/Cancelled Orders"
             id="menu_item_fnx_pd_schedules_all"
             parent="menu_fnx_pd_schedules"
             sequence="40"
