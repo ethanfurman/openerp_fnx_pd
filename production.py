@@ -392,7 +392,7 @@ class fnx_pd_schedule(osv.Model):
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
         'schedule_date': fields.date('Scheduled for'),
         'schedule_seq': fields.integer('Sequence'),
-        'line_id': fields.many2one('cmms.line', 'Production Line'),
+        'line_id': fields.many2one('fis_integration.production_line', 'Production Line'),
         'qty': fields.integer('Quantity'),
         'state': fields.selection([
             ('dormant','Not Running'),
