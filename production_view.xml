@@ -39,19 +39,17 @@
                                         <field name="item_id" attrs="{'readonly':True}"/>
                                     </h2>
                                 </div>
-                                <div class="oe_right oe_button_box">
-                                    <button string="Start Job" groups="fnx_pd.group_fnx_pd_user" name="pd_checkin" states="ready" type="object"/>
-                                    <button string="Job Finished" groups="fnx_pd.group_fnx_pd_user" name="pd_complete" states="running" type="object"/>
-                                </div>
-                                <field name="confirmed"/>
                             </group>
                         </group>
                         <group>
                             <group>
+                                <field name="confirmed" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <seperator colspan="2"/>
                                 <field name="coating" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                                 <field name="allergens" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                             </group>
                             <group>
+                                <seperator colspan="4"/>
                                 <field name="dept" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                                 <field name="line" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                             </group>
@@ -67,7 +65,7 @@
                                 <separator string="Reset state to"/>
                                 <button string="Unscheduled" name="pd_draft" type="object" context="{'manager_override':True}"/>
                                 <button string="Ready" name="pd_ready" type="object" context="{'manager_override':True}"/>
-                                <button string="Running" name="pd_start" type="object" context="{'manager_override':True}"/>
+                                <button string="Running" name="pd_running" type="object" context="{'manager_override':True}"/>
                                 <button string="Complete" name="pd_complete" type="object" context="{'manager_override':True}"/>
                                 <button string="Cancelled" name="pd_cancel" type="object" context="{'manager_override':True}"/>
                             </page>
@@ -138,11 +136,14 @@
             <field name="priority" eval="10"/>
             <field name="arch" type="xml">
                 <tree string="Tree View" toolbar="1" create="false" editable="bottom">
-                    <field name="line_id" readonly="check_context_readonly()"/>
+                    <button string="Start Job" groups="fnx_pd.group_fnx_pd_user" name="pd_run" states="ready" type="object" attrs="{'invisible':[('state','in',['running','complete'])]}"/>
+                    <button string="Finish Job" groups="fnx_pd.group_fnx_pd_user" name="pd_complete" states="running" type="object" attrs="{'invisible':[('state','in',['dormant','complete'])]}"/>
+                    <field name="state"/>
+                    <field name="line_id" readonly="check_context()"/>
                     <field name="order_id" readonly="True"/>
-                    <field name="schedule_date" readonly="check_context_readonly()"/>
-                    <field name="schedule_seq" readonly="check_context_readonly()"/>
-                    <field name="qty" readonly="check_context_readonly()"/>
+                    <field name="schedule_date" readonly="check_context()"/>
+                    <field name="schedule_seq" readonly="check_context()"/>
+                    <field name="qty" readonly="check_context()"/>
                 </tree>
             </field>
         </record>

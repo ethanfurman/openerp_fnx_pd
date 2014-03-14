@@ -30,8 +30,7 @@ class fnx_pd_order(osv.Model):
         'schedule_ids': fields.one2many('fnx.pd.schedule', 'order_id', 'Schedule'),
         'state': fields.selection([
             ('draft', 'Unscheduled'),
-            ('needs_schedule', 'Ready, needs Scheduled'),
-            ('partial', 'Partially Scheduled'),
+            ('needs_schedule', 'Needs Scheduled'),
             ('scheduled', 'Scheduled'),
             ('ready', 'Ready'),
             ('running', 'In Progress'),
@@ -79,7 +78,7 @@ class fnx_pd_order(osv.Model):
         date = values.pop('date')
         new_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
         current = self.browse(cr, uid, new_id, context=context)
-        # create scehdule entry
+        # create schedule entry
         sched_vals = {
                 'name': '%s - [%s] %s' % (current.order_no, current.item_id.xml_id, current.item_id.name),
                 'schedule_date': date,
@@ -102,9 +101,11 @@ class fnx_pd_order(osv.Model):
             self.message_subscribe_users(cr, uid, [new_id], user_ids=follower_ids, context=context)
         return new_id
 
-    def write(self, cr, uid, id, values, context=None):
+    def write(self, cr, uid, ids, values, context=None):
         if context is None:
             context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
         context['mail_create_nolog'] = True
         context['mail_create_nosubscribe'] = True
         follower_ids = values.pop('follower_ids', [])
@@ -112,183 +113,172 @@ class fnx_pd_order(osv.Model):
         state = None
         if not context.pop('from_workflow', False):
             state = values.pop('state', None)
-        result = super(fnx_pd_order, self).write(cr, uid, id, values, context=context)
+        result = super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
+        # check schedule to see if new date is later than existing dates
+        if date:
+            fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+            for id in ids:
+                current = self.browse(cr, uid, id, context=context)
+                if date > min([sched.date for sched in current.schedule_ids]):
+                    fnx_pd_schedule.write(cr, uid, current.schedule_ids,
+                            {'schedule_date': date, 'schedule_seq':0}, context=context)
+                    if current.confirmed:
+                        state = 'needs_schedule'
+                    else:
+                        state = 'draft'
         if state is not None:
             wf = self.WORKFLOW[state]
-            wf(self, cr, uid, id, context=context)
+            wf(self, cr, uid, ids, context=context)
+        elif 'state' not in values:
+            self.pd_update_state(cr, uid, ids, context=context)
         if follower_ids:
-            self.message_subscribe_users(cr, uid, [id], user_ids=follower_ids, context=context)
+            self.message_subscribe_users(cr, uid, ids, user_ids=follower_ids, context=context)
         return result
 
     def pd_draft(self, cr, uid, ids, context=None):
+        "called when an order is first created, or if current FIS date is later than current schedule date"
         if context is None:
             context = {}
+            if isinstance(ids, (int, long)):
+                ids = [ids]
         context['from_workflow'] = True
         override = context.get('manager_override')
         values = {'state':'draft'}
-        if override:
-            values['appointment_time'] = 0.0
-            values['appt_confirmed'] = False
-            values['appt_confirmed_on'] = False
-            values['appt_scheduled_by_id'] = False
-            values['check_in'] = False
-            values['check_out'] = False
         if self.write(cr, uid, ids, values, context=context):
             if override:
-                context['mail_create_nosubscribe'] = True
-                self.message_post(cr, uid, ids, body="Reset to draft", context=context)
+                fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+                for id in ids:
+                    current = self.browse(cr, uid, id, context=context)
+                    schedule_ids = [sched.id for sched in current.schedule_ids]
+                    fnx_pd_schedule.write(cr, uid, schedule_ids, {'state':'dormant'}, context=context)
             return True
         return False
 
-    def NOOP(*args,**kwargs):return False
-
-#    def pd_schedule(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        context['from_workflow'] = True
-#        user_tz = get_user_timezone(self, cr, uid)[uid]
-#        override = context.get('manager_override')
-#        current = self.browse(cr, uid, ids, context=context)[0]
-#        if current.appointment_date and current.appointment_time:
-#            values = {
-#                    'appt_scheduled_by_id': uid,
-#                    'appt_confirmed': True,
-#                    'appt_confirmed_on': DateTime.now(),
-#                    }
-#            if override:
-#                values['state'] = 'scheduled'
-#            elif current.state == 'draft':
-#                values['state'] = 'scheduled'
-#            elif current.state == 'appt':
-#                values['state'] = 'ready'
-#            dt = utc.localize(DateTime(current.appointment).datetime())
-#            if user_tz:
-#                dt = dt.astimezone(timezone(user_tz))
-#            body = 'Scheduled for %s' % (dt.strftime('%Y-%m-%d %H:%M %Z'), )
-#            if override:
-#                values['check_in'] = False
-#                values['check_out'] = False
-#                values['appt_confirmed_on'] = current.appt_confirmed_on
-#                body = 'Reset to scheduled.'
-#            if self.write(cr, uid, ids, values, context=context):
-#                context['mail_create_nosubscribe'] = True
-#                for id in ids:
-#                    self.message_post(cr, uid, id, body=body, context=context)
-#                return True
-#        return False
-#
-#    def pd_appointment(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        context['from_workflow'] = True
-#        override = context.get('manager_override')
-#        values = {'state':'appt'}
-#        body = 'Order pulled.'
-#        if override:
-#            values['appointment_time'] = 0.0
-#            values['appt_confirmed'] = False
-#            values['appt_confirmed_on'] = False
-#            values['appt_scheduled_by_id'] = False
-#            values['check_in'] = False
-#            values['check_out'] = False
-#            body = 'Appointment cancelled.'
-#        if self.write(cr, uid, ids, values, context=context):
-#            context['mail_create_nosubscribe'] = True
-#            for id in ids:
-#                self.message_post(cr, uid, id, body=body, context=context)
-#            return True
-#        return False
-#
-#    def pd_ready(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        context['from_workflow'] = True
-#        override = context.get('manager_override')
-#        values = {'state':'ready'}
-#        body = 'Order pulled.'
-#        current = self.browse(cr, uid, ids, context=context)[0]
-#        if not (current.appointment_date and current.appointment_time):
-#            return False
-#        if override:
-#            values['check_in'] = False
-#            values['check_out'] = False
-#            body = 'Reset to Ready.'
-#        if self.write(cr, uid, ids, values, context=context):
-#            context['mail_create_nosubscribe'] = True
-#            for id in ids:
-#                self.message_post(cr, uid, id, body=body, context=context)
-#            return True
-#        return False
-#
-#    def pd_checkin(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        if len(ids) > 1:
-#            # check all have the same carrier
-#            records = self.browse(cr, uid, ids, context=context)
-#            carrier_ids = [r.carrier_id.id for r in records]
-#            if not all_equal(carrier_ids):
-#                raise osv.except_osv('Error', 'Not all carriers are the same, unable to process')
-#        context['from_workflow'] = True
-#        override = context.get('manager_override')
-#        current = self.browse(cr, uid, ids, context=context)[0]
-#        values = {
-#                'state':'checked_in',
-#                'check_in': current.check_in or DateTime.now(),
-#                }
-#        body = 'Driver checked in at %s' % values['check_in']
-#        if override:
-#            values['check_out'] = False
-#            body = 'Reset to Driver checked in.'
-#        if self.write(cr, uid, ids, values, context=context):
-#            context['mail_create_nosubscribe'] = True
-#            for id in ids:
-#                self.message_post(cr, uid, id, body=body, context=context)
-#            return True
-#        return False
-#
-    def pd_complete(self, cr, uid, ids, context=None):
+    def pd_needs_schedule(self, cr, uid, ids, context=None):
+        "supplies have been pulled (from FIS), not yet scheduled; or no supplies and not fully scheduled"
         if context is None:
             context = {}
         if isinstance(ids, (int, long)):
             ids = [ids]
         context['from_workflow'] = True
         override = context.get('manager_override')
-        order_update = context.get('order_update')
-        values = {'state':'complete'}
-        if not order_update:
-            values['check_out'] = DateTime.now()
-            body = 'Order complete.'
-        fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+        values = {'state':'needs_schedule'}
+        body = 'Order pulled, needs to be scheduled.'
+        if override:
+            pass
+        if self.write(cr, uid, ids, values, context=context):
+            context['mail_create_nosubscribe'] = True
+            for id in ids:
+                self.message_post(cr, uid, id, body=body, context=context)
+            return True
+        return False
+
+    def pd_schedule(self, cr, uid, ids, context=None):
+        "order has complete schedules, but supplies have not been pulled (from fnx.pd.schedule)"
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        override = context.get('manager_override')
+        current = self.browse(cr, uid, ids, context=context)[0]
+        if current.confirmed:  # supplies have been pulled?
+            values = {'state': 'ready'}
+        else:
+            values = {'state': 'scheduled'}
+        if override:
+            pass
+        if self.write(cr, uid, ids, values, context=context):
+            #context['mail_create_nosubscribe'] = True
+            #for id in ids:
+            #    self.message_post(cr, uid, id, body=body, context=context)
+            return True
+        return False
+
+    def pd_ready(self, cr, uid, ids, context=None):
+        "only called by manager override"
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        override = context.get('manager_override')
+        state = 'ready'
+        body = 'Ready'
+        current = self.browse(cr, uid, ids, context=context)[0]
+        # TODO check that supplies are confirmed and order is scheduled
+        for id in ids:
+            if not current.confirmed:
+                state = 'scheduled'
+            if not (all(sched.schedule_seq for sched in current.schedule_ids) \
+              and sum(sched.qty for sched in current.schedule_ids) == current.qty):
+                state = 'needs_schedule'
+        if override:
+            body = 'Reset to Ready.'
+            pass
+        if self.write(cr, uid, ids, {'state': state}, context=context):
+            return True
+        return False
+
+    def pd_running(self, cr, uid, ids, context=None):
+        "only called by manager override"
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        for id in ids:
+            current = self.browse(cr, uid, ids, context=context)[0]
+            if any(sched.state == 'running' for sched in current.schedule_ids):
+                if not self.write(cr, uid, ids, {'state':'running'}, context=context):
+                    return False
+        return True
+
+    def pd_complete(self, cr, uid, ids, context=None):
+        "only called by manager override"
+        if context is None:
+            context = {}
+        context['from_workflow'] = True
+        return self.write(cr, uid, ids, {'state':'complete'}, context=context)
+
+    def pd_cancel(self, cr, uid, ids, context=None):
+        "only called by manager override"
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        if self.write(cr, uid, ids, {'state':'cancelled'}, context=context):
+            context['mail_create_nosubscribe'] = True
+            self.message_post(cr, uid, ids, body='Order cancelled.', context=context)
+            return True
+        return False
+
+    def pd_update_state(self, cr, uid, ids, context=None):
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        context['mail_create_nosubscribe'] = True
         for id in ids:
             current = self.browse(cr, uid, id, context=context)
-            if override:
-                body = 'Reset to Complete.'
-            if self.write(cr, uid, id, values, context=context):
-                context['mail_create_nosubscribe'] = True
+            if all(sched.state == 'complete' for sched in current.schedule_ids):
+                state = 'complete'
+            elif any(sched.state == 'running' for sched in current.schedule_ids):
+                state = 'running'
+            elif all(sched.schedule_seq for sched in current.schedule_ids) \
+              and sum(sched.qty for sched in current.schedule_ids) == current.qty:
+                if current.confirmed:
+                    state = 'ready'
+                else:
+                    state = 'scheduled'
+            elif any(sched.schedule_seq for sched in current.schedule_ids) or current.confirmed:
+                state = 'needs_schedule'
+            else:
+                state = 'draft'
+            if not self.write(cr, uid, id, {'state':state}, context=context):
+                return False
         return True
-#
-#    def pd_cancel(self, cr, uid, ids, context=None):
-#        if context is None:
-#            context = {}
-#        if isinstance(ids, (int, long)):
-#            ids = [ids]
-#        context['from_workflow'] = True
-#        if self.write(cr, uid, ids, {'state':'cancelled'}, context=context):
-#            context['mail_create_nosubscribe'] = True
-#            for id in ids:
-#                self.message_post(cr, uid, id, body='Order cancelled.', context=context)
-#            return True
-#        return False
-#
+
 #    def search(self, cr, user, args=None, offset=0, limit=None, order=None, context=None, count=False):
 #        # 2013 08 12  (yyyy mm dd)
 #        new_args = []
@@ -335,13 +325,12 @@ class fnx_pd_order(osv.Model):
 
     WORKFLOW = {
         'draft': pd_draft,
-        #'scheduled': pd_schedule,
-        #'appt': pd_appointment,
-        #'ready': pd_ready,
-        #'checked_in': pd_checkin,
-        #'complete': NOOP,
+        'needs_schedule': pd_needs_schedule,
+        'scheduled': pd_schedule,
+        'ready': pd_ready,
+        'running': pd_running,
         'complete': pd_complete,
-        #'cancelled': pd_cancel,
+        'cancelled': pd_cancel,
         }
 
 
@@ -353,31 +342,13 @@ class fnx_pd_schedule(osv.Model):
     _description = 'production schedule'
     _order = 'schedule_date asc, schedule_seq asc'
 
-    def _order_status(self, cr, uid, ids, field_names=None, args=None, context=None):
-        if context == None:
-            context = {}
-        if isinstance(ids, (int, long)):
-            ids = [ids]
-        values = {}
-        for record in self.browse(cr, uid, ids, context=context):
-            values[record.id] = record.order_id.state
-        return values
-
-    _columns= {
-        'name': fields.char(string="Order / Product", size=64),
-        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
-        'schedule_date': fields.date('Scheduled for'),
-        'schedule_seq': fields.integer('Sequence'),
-        'line_id': fields.many2one('cmms.line', 'Production Line'),
-        'qty': fields.integer('Quantity'),
-        'order_status': fields.function(
-            _order_status,
-            type='char',
-            method=True,
-            store=True,
-            string='Order State',
-            ),
-    }
+    def _get_schedule_ids_for_order(self, cr, uid, ids, context=None):
+        schedule_ids = []
+        fnx_pd_order = self.pool.get('fnx.pd.order')
+        orders = fnx_pd_order.browse(cr, uid, ids, context=context)
+        for order in orders:
+            schedule_ids.extend(schedule.id for schedule in order.schedule_ids)
+        return schedule_ids
 
     def _insert_order_in_sequence(self, cr, uid, id, proposed, context=None):
         if context is None:
@@ -396,6 +367,16 @@ class fnx_pd_schedule(osv.Model):
         for order in days_orders:  # either zero or one order
             self.write(cr, uid, [order.id], values={'schedule_seq':proposed.schedule_seq+1}, context=context)
 
+    def _order_status(self, cr, uid, ids, field_names=None, args=None, context=None):
+        if context == None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        values = {}
+        for record in self.browse(cr, uid, ids, context=context):
+            values[record.id] = record.order_id.state
+        return values
+
     def _sum_order_quantities(self, cr, uid, current, proposed, context=None):
         if context is None:
             context = {}
@@ -406,12 +387,66 @@ class fnx_pd_schedule(osv.Model):
         new_total = current_total - current.qty + proposed.qty
         return new_total
 
+    _columns= {
+        'name': fields.char(string="Order / Product", size=64),
+        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
+        'schedule_date': fields.date('Scheduled for'),
+        'schedule_seq': fields.integer('Sequence'),
+        'line_id': fields.many2one('cmms.line', 'Production Line'),
+        'qty': fields.integer('Quantity'),
+        'state': fields.selection([
+            ('dormant','Not Running'),
+            ('running','Running'),
+            ('complete','Done'),
+            ],
+            'Status',
+            ),
+        'order_status': fields.function(
+            _order_status,
+            type='char',
+            method=True,
+            store={
+                'fnx.pd.order': (_get_schedule_ids_for_order, ['state'], 20),
+                },
+            string='Order State',
+            ),
+        }
+
+    _defaults = {
+        'state': 'dormant',
+        }
+
+    def pd_run(self, cr, uid, ids, context=None):
+        fnx_pd_order = self.pool.get('fnx.pd.order')
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        for id in ids:
+            if self.write(cr, uid, ids, {'state':'running'}, context=context):
+                current = self.browse(cr, uid, id, context=context)
+                fnx_pd_order.pd_update_state(cr, uid, [current.order_id.id], context=context)
+            else:
+                return False
+        return True
+
+    def pd_complete(self, cr, uid, ids, context=None):
+        fnx_pd_order = self.pool.get('fnx.pd.order')
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        for id in ids:
+            if self.write(cr, uid, ids, {'state':'complete'}, context=context):
+                current = self.browse(cr, uid, id, context=context)
+                fnx_pd_order.pd_update_state(cr, uid, [current.order_id.id], context=context)
+            else:
+                return False
+        return True
+
     def write(self, cr, uid, ids, values, context=None):
         if ids:
             if isinstance(ids, (int, long)):
                 ids = [ids]
             if context is None:
                 context = {}
+            fnx_pd_order = self.pool.get('fnx.pd.order')
             current = self.browse(cr, uid, ids[0], context=context)
             master = current.order_id
             new_values = Proposed(self, values)
@@ -423,17 +458,17 @@ class fnx_pd_schedule(osv.Model):
                 self._insert_order_in_sequence(cr, uid, ids[0], proposed, context)
             if new_values.qty:
                 new_total = self._sum_order_quantities(cr, uid, current, proposed, context=context)
-                if new_total > master.qty:
-                    raise osv.except_osv('Error', 'New total if %d is more than order calls for (%d)' % (new_total, master.qty))
-                # create new schedule entry to cover the difference
                 new_qty = master.qty - new_total
-                self.create(cr, uid, dict(
-                    name=proposed.name,
-                    order_id=proposed.order_id.id,
-                    schedule_date=proposed.schedule_date,
-                    schedule_seq=0,
-                    line_id=proposed.line_id.id,
-                    qty=new_qty,
-                    ), context=context)
+                if new_qty > 0:
+                    # create new schedule entry to cover the difference
+                    self.create(cr, uid, dict(
+                        name=proposed.name,
+                        order_id=proposed.order_id.id,
+                        schedule_date=proposed.schedule_date,
+                        schedule_seq=0,
+                        line_id=proposed.line_id.id,
+                        qty=new_qty,
+                        ), context=context)
+                fnx_pd_order.pd_update_state(cr, uid, [proposed.order_id.id], context=context)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
 fnx_pd_schedule()
