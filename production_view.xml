@@ -55,7 +55,7 @@
                             </group>
                             <group>
                                 <field name="dept" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
-                                <field name="line_id" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <!-- <field name="line_id" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/> -->
                             </group>
                             <group>
                                 <field name="qty"/>
@@ -63,7 +63,15 @@
                         </group>
                         <notebook>
                             <page string="Production Runs">
-                                <field name="schedule_ids" nolabel="1" readwrite="groups('fnx_pd.group_fnx_pd_user')"/>
+                                <field name="schedule_ids" nolabel="1" readwrite="groups('fnx_pd.group_fnx_pd_user')">
+                                    <tree string="Tree View" toolbar="1" editable="bottom">
+                                        <field name="state" readonly="True"/>
+                                        <field name="line_id" readonly="check_context()" options="{'create':False, 'create_edit':False}"/>
+                                        <field name="schedule_date" readonly="check_context()"/>
+                                        <field name="schedule_seq" readonly="check_context()"/>
+                                        <field name="qty" readonly="check_context()"/>
+                                    </tree>
+                                </field>
                             </page>
                             <page string="Manager Overrides" visible="groups('fnx_pd.group_fnx_pd_manager')">
                                 <separator string="Reset state to"/>
@@ -145,6 +153,7 @@
                     <field name="state"/>
                     <field name="order_id" readonly="True"/>
                     <field name="line_id" readonly="check_context()" options="{'create':False, 'create_edit':False}"/>
+                    <field name="item_id" readonly="True"/>
                     <field name="schedule_date" readonly="check_context()"/>
                     <field name="schedule_seq" readonly="check_context()"/>
                     <field name="qty" readonly="check_context()"/>
@@ -161,6 +170,7 @@
                     <field name="order_id" string="Orders" />
                     <field name="schedule_date" string="Dates" />
                     <field name="line_id" string="Production Line"/>
+                    <field name="item_id" string="Production Item"/>
                     <field name="order_status" string="Order State" />
                     <separator/>
                     <group expand="0" string="Group by...">

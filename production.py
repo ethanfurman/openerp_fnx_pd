@@ -25,7 +25,7 @@ class fnx_pd_order(osv.Model):
         'coating': fields.char('Coating', size=10),
         'allergens': fields.char('Allergens', size=10),
         'dept': fields.char('Department', size=10),
-        'line_id': fields.char('Production Line', size=10),
+        'line_id': fields.many2one('fis_integration.production_line', 'Production Line'),
         'confirmed': fields.boolean('Supplies reserved'),
         'schedule_ids': fields.one2many('fnx.pd.schedule', 'order_id', 'Schedule'),
         'state': fields.selection([
@@ -70,7 +70,7 @@ class fnx_pd_order(osv.Model):
         context['mail_create_nolog'] = True
         context['mail_create_nosubscribe'] = True
         follower_ids = values.pop('follower_ids')
-        line_id = values.pop('line_id')
+        line_id = values['line_id']
         product = product_product.browse(cr, uid, values['item_id'])
         product_follower_ids = [p.id for p in (product.message_follower_ids or [])]
         user_follower_ids = res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)])
@@ -86,6 +86,7 @@ class fnx_pd_order(osv.Model):
                 'qty': current.qty,
                 'order_id': new_id,
                 'line_id': line_id,
+                'item_id': item_id,
                 }
         sched_id = fnx_pd_schedule.create(cr, uid, sched_vals, context=context)
         # create comments
@@ -115,6 +116,10 @@ class fnx_pd_order(osv.Model):
         state = None
         if not context.pop('from_workflow', False):
             state = values.pop('state', None)
+            values.pop('line_id', None)
+            # view does not display 'line_id', so it can only be set from the FIS interface script, or
+            # from the schedule model; if from the script, ignore it
+        # write data to record
         result = super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
         # check schedule to see if new date is later than existing dates
         if date:
@@ -262,6 +267,7 @@ class fnx_pd_order(osv.Model):
         context['from_workflow'] = True
         context['mail_create_nosubscribe'] = True
         for id in ids:
+            values = {}
             current = self.browse(cr, uid, id, context=context)
             if all(sched.state == 'complete' for sched in current.schedule_ids):
                 state = 'complete'
@@ -277,7 +283,11 @@ class fnx_pd_order(osv.Model):
                 state = 'needs_schedule'
             else:
                 state = 'draft'
-            if not self.write(cr, uid, id, {'state':state}, context=context):
+            values['state'] = state
+            line_xml_ids = [(sched.line_id.xml_id, sched.line_id.id) for sched in current.schedule_ids]
+            if line_xml_ids:
+                values['line_id'] = min(line_xml_ids)[1]
+            if not self.write(cr, uid, id, values, context=context):
                 return False
         return True
 
@@ -424,6 +434,7 @@ class fnx_pd_schedule(osv.Model):
                 },
             string='Order State',
             ),
+        'item_id': fields.many2one('product.product', 'Item', required=True),
         }
 
     _defaults = {
@@ -465,6 +476,10 @@ class fnx_pd_schedule(osv.Model):
             master = current.order_id
             new_values = Proposed(self, values)
             proposed = Proposed(self, values, current)
+            if isinstance(proposed.order_id, (int, long)):
+                order_id = proposed.order_id
+            else:
+                order_id = proposed.order_id.id
             if new_values.schedule_seq:
                 if len(ids) > 1:
                     raise osv.except_osv('Error', 'Cannot set multiple records to the same non-zero sequence')
@@ -473,16 +488,6 @@ class fnx_pd_schedule(osv.Model):
             if new_values.qty:
                 new_total = self._sum_order_quantities(cr, uid, current, proposed, context=context)
                 new_qty = master.qty - new_total
-                if new_qty > 0:
-                    # create new schedule entry to cover the difference
-                    self.create(cr, uid, dict(
-                        name=proposed.name,
-                        order_id=proposed.order_id.id,
-                        schedule_date=proposed.schedule_date,
-                        schedule_seq=0,
-                        line_id=proposed.line_id.id,
-                        qty=new_qty,
-                        ), context=context)
-                fnx_pd_order.pd_update_state(cr, uid, [proposed.order_id.id], context=context)
+            fnx_pd_order.pd_update_state(cr, uid, [order_id], context=context)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
 fnx_pd_schedule()
