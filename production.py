@@ -25,7 +25,7 @@ class fnx_pd_order(osv.Model):
         'coating': fields.char('Coating', size=10),
         'allergens': fields.char('Allergens', size=10),
         'dept': fields.char('Department', size=10),
-        'line': fields.char('Production Line', size=10),
+        'line_id': fields.char('Production Line', size=10),
         'confirmed': fields.boolean('Supplies reserved'),
         'schedule_ids': fields.one2many('fnx.pd.schedule', 'order_id', 'Schedule'),
         'state': fields.selection([
@@ -70,6 +70,7 @@ class fnx_pd_order(osv.Model):
         context['mail_create_nolog'] = True
         context['mail_create_nosubscribe'] = True
         follower_ids = values.pop('follower_ids')
+        line_id = values.pop('line_id')
         product = product_product.browse(cr, uid, values['item_id'])
         product_follower_ids = [p.id for p in (product.message_follower_ids or [])]
         user_follower_ids = res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)])
@@ -84,6 +85,7 @@ class fnx_pd_order(osv.Model):
                 'schedule_date': date,
                 'qty': current.qty,
                 'order_id': new_id,
+                'line_id': line_id,
                 }
         sched_id = fnx_pd_schedule.create(cr, uid, sched_vals, context=context)
         # create comments
@@ -342,6 +344,18 @@ class fnx_pd_schedule(osv.Model):
     _description = 'production schedule'
     _order = 'schedule_date asc, schedule_seq asc'
 
+    def _generate_order_by(self, order_spec, query):
+        "correctly orders state field if state is in query"
+        order_by = super(fnx_pd_schedule, self)._generate_order_by(order_spec, query)
+        if order_spec and 'state ' in order_spec:
+            state_column = self._columns['state']
+            state_order = 'CASE '
+            for i, state in enumerate(state_column.selection):
+                state_order += "WHEN %s.state='%s' THEN %i " % (self._table, state[0], i)
+            state_order += 'END '
+            order_by = order_by.replace('"%s"."state" ' % self._table, state_order)
+        return order_by
+
     def _get_schedule_ids_for_order(self, cr, uid, ids, context=None):
         schedule_ids = []
         fnx_pd_order = self.pool.get('fnx.pd.order')
@@ -392,7 +406,7 @@ class fnx_pd_schedule(osv.Model):
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
         'schedule_date': fields.date('Scheduled for'),
         'schedule_seq': fields.integer('Sequence'),
-        'line_id': fields.many2one('fis_integration.production_line', 'Production Line'),
+        'line_id': fields.many2one('fis_integration.production_line', 'Production Line', domain="[('name','!=','Open')]"),
         'qty': fields.integer('Quantity'),
         'state': fields.selection([
             ('dormant','Not Running'),

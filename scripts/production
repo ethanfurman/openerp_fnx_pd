@@ -75,6 +75,7 @@ def get_order(order):
 def import_spreadsheet(OE, file_name):
     errors = []
     imported_orders = []   # list of imported current orders so that non-current orders still on file can be flagged completed
+    line_ids = PropertyDict((r.xml_id, r) for r in get_records(OE, 'fis_integration.production_lines', fields=['id','xml_id']))
     with open_workbook(file_name) as work_book:
         sheet = work_book[2]
         last_row = None
@@ -92,7 +93,7 @@ def import_spreadsheet(OE, file_name):
             data = PropertyDict()
             data.follower_ids = followers
             data.dept = row[dept]
-            data.line = row[prod_line]
+            data.line_id = line_ids[row[prod_line]]
             data.item_id = item
             data.order_no = row[order_num]
             data.confirmed = row[confirmed] == 'Y'

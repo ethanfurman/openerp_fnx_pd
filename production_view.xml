@@ -12,6 +12,7 @@
             <field name="arch" type="xml">
                 <tree string="Tree View" toolbar="1" create="false">
                     <field name="order_no"/>
+                    <field name="line_id"/>
                     <field name="item_id"/>
                     <field name="qty"/>
                     <field name="state"/>
@@ -33,25 +34,28 @@
                             <group>
                                 <div>
                                     <h1>
-                                        <field name="order_no" attrs="{'readonly':True}"/>
+                                        <label for="order_no" string="Order"/>
+                                        <field name="order_no" attrs="{'readonly':True}" class="oe_inline"/>
                                     </h1>
                                     <h2>
-                                        <field name="item_id" attrs="{'readonly':True}"/>
+                                        <label for="item_id" string="Item"/>
+                                        <field name="item_id" attrs="{'readonly':True}" class="oe_inline" options="{'create':False, 'create_edit':False}"/>
                                     </h2>
                                 </div>
                             </group>
                         </group>
                         <group>
-                            <group>
-                                <field name="confirmed" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <field name="confirmed" readwrite="groups('fnx_pd.group_fnx_pd_manager')" colspan="2"/>
                                 <seperator colspan="2"/>
+                        </group>
+                        <group>
+                            <group>
                                 <field name="coating" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                                 <field name="allergens" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                             </group>
                             <group>
-                                <seperator colspan="4"/>
                                 <field name="dept" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
-                                <field name="line" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
+                                <field name="line_id" readwrite="groups('fnx_pd.group_fnx_pd_manager')"/>
                             </group>
                             <group>
                                 <field name="qty"/>
@@ -139,8 +143,8 @@
                     <button string="Start Job" groups="fnx_pd.group_fnx_pd_user" name="pd_run" states="ready" type="object" attrs="{'invisible':[('state','in',['running','complete'])]}"/>
                     <button string="Finish Job" groups="fnx_pd.group_fnx_pd_user" name="pd_complete" states="running" type="object" attrs="{'invisible':[('state','in',['dormant','complete'])]}"/>
                     <field name="state"/>
-                    <field name="line_id" readonly="check_context()"/>
                     <field name="order_id" readonly="True"/>
+                    <field name="line_id" readonly="check_context()" options="{'create':False, 'create_edit':False}"/>
                     <field name="schedule_date" readonly="check_context()"/>
                     <field name="schedule_seq" readonly="check_context()"/>
                     <field name="qty" readonly="check_context()"/>
@@ -156,7 +160,7 @@
                 <search string="Search Production Orders">
                     <field name="order_id" string="Orders" />
                     <field name="schedule_date" string="Dates" />
-                    <field name="line_id" string="Production Line" />
+                    <field name="line_id" string="Production Line"/>
                     <field name="order_status" string="Order State" />
                     <separator/>
                     <group expand="0" string="Group by...">
