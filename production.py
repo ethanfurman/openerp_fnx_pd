@@ -71,6 +71,7 @@ class fnx_pd_order(osv.Model):
         context['mail_create_nosubscribe'] = True
         follower_ids = values.pop('follower_ids')
         line_id = values['line_id']
+        item_id = values['item_id']
         product = product_product.browse(cr, uid, values['item_id'])
         product_follower_ids = [p.id for p in (product.message_follower_ids or [])]
         user_follower_ids = res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)])
@@ -123,7 +124,7 @@ class fnx_pd_order(osv.Model):
             fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
             for id in ids:
                 current = self.browse(cr, uid, id, context=context)
-                if date > min([sched.date for sched in current.schedule_ids]):
+                if date > min([sched.schedule_date for sched in current.schedule_ids]):
                     fnx_pd_schedule.write(cr, uid, current.schedule_ids,
                             {'schedule_date': date, 'schedule_seq':0}, context=context)
                     if current.confirmed:
