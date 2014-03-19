@@ -108,6 +108,8 @@ def import_spreadsheet(OE, file_name):
             current_record = get_records(OE, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_record:
                 current_record = current_record[0]
+                if row[prod_line] == '98':
+                    del data.line_id
                 OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
                 OE.fnx_pd_order.create(dict(data))

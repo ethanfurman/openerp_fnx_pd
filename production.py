@@ -116,9 +116,6 @@ class fnx_pd_order(osv.Model):
         state = None
         if not context.pop('from_workflow', False):
             state = values.pop('state', None)
-            values.pop('line_id', None)
-            # view does not display 'line_id', so it can only be set from the FIS interface script, or
-            # from the schedule model; if from the script, ignore it
         # write data to record
         result = super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
         # check schedule to see if new date is later than existing dates
