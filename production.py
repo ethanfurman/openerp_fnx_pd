@@ -489,3 +489,17 @@ class fnx_pd_schedule(osv.Model):
             fnx_pd_order.pd_update_state(cr, uid, [order_id], context=context)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
 fnx_pd_schedule()
+
+class production_line(osv.Model):
+    "production line"
+    _name = 'fis_integration.production_line'
+    _inherit = 'fis_integration.production_line'
+
+    _columns = {
+        'schedule_ids': fields.one2many(
+            'fnx.pd.schedule',
+            'line_id',
+            'Scheduled Runs',
+            ),
+        }
+production_line()

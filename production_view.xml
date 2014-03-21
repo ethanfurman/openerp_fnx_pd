@@ -227,5 +227,70 @@
             action="action_fnx_pd_tree_schedules"
             />
 
+        <menuitem
+            name="Resources"
+            id="menu_fnx_pd_resources"
+            parent="menu_fnx_pd_root"
+            sequence="30"
+            />
+
+        <record model="ir.ui.view" id="fnx_pd_production_line_tree">
+            <field name="name">Production Lines</field>
+            <field name="model">fis_integration.production_line</field>
+            <field name="arch" type="xml">
+                <tree string="Production Lines" create="false">
+                    <field name="name"/>
+                </tree>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="fnx_pd_production_line_form">
+            <field name="name">Production Lines</field>
+            <field name="model">fis_integration.production_line</field>
+            <field name="arch" type="xml">
+                <form string="Production Lines" version="7.0">
+                    <h1>
+                        <field name="desc"/>
+                    </h1>
+                    <h2>
+                        <labels for="xml_id" string="FIS ID"/>
+                        <field name="xml_id"/>
+                    </h2>
+                    <notebook>
+                        <page string="Schedule">
+                            <field name="schedule_ids" nolabel="1">
+                                <tree>
+                                    <field name="order_status"/>
+                                    <field name="order_id"/>
+                                    <field name="item_id"/>
+                                    <field name="schedule_date"/>
+                                    <field name="schedule_seq"/>
+                                    <field name="qty"/>
+                                    <field name="state"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </form>
+            </field>
+        </record>
+
+        <record model="ir.actions.act_window" id="action_fnx_pd_production_line">
+            <field name="name">Production Lines</field>
+            <field name="res_model">fis_integration.production_line</field>
+            <field name="view_type">form</field>
+            <field name="view_id" ref="fnx_pd_production_line_tree"/>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('desc','!=','Open')]</field>
+        </record>
+
+        <menuitem
+            name="Production Lines"
+            id="menu_fnx_pd_production_lines"
+            parent="menu_fnx_pd_resources"
+            sequence="10"
+            action="action_fnx_pd_production_line"
+            />
+
     </data>
 </openerp>
