@@ -29,7 +29,7 @@ class fnx_pd_order(osv.Model):
         'confirmed': fields.boolean('Supplies reserved'),
         'schedule_ids': fields.one2many('fnx.pd.schedule', 'order_id', 'Schedule'),
         'state': fields.selection([
-            ('draft', 'Unscheduled'),
+            ('draft', 'Draft'),
             ('needs_schedule', 'Needs Scheduled'),
             ('scheduled', 'Scheduled'),
             ('ready', 'Ready'),
@@ -394,9 +394,12 @@ class fnx_pd_schedule(osv.Model):
             context = {}
         if isinstance(ids, (int, long)):
             ids = [ids]
+        fnx_pd_order = self.pool.get('fnx.pd.order')
+        states = dict([(v, n) for (v, n) in fnx_pd_order._columns['state'].selection])
+        print states
         values = {}
         for record in self.browse(cr, uid, ids, context=context):
-            values[record.id] = record.order_id.state
+            values[record.id] = states[record.order_id.state]
         return values
 
     def _sum_order_quantities(self, cr, uid, current, proposed, context=None):

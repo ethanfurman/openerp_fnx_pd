@@ -266,7 +266,6 @@
                                     <field name="schedule_date"/>
                                     <field name="schedule_seq"/>
                                     <field name="qty"/>
-                                    <field name="state"/>
                                 </tree>
                             </field>
                         </page>
