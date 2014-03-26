@@ -125,7 +125,8 @@ class fnx_pd_order(osv.Model):
             for id in ids:
                 current = self.browse(cr, uid, id, context=context)
                 if date > min([sched.schedule_date for sched in current.schedule_ids]):
-                    fnx_pd_schedule.write(cr, uid, current.schedule_ids,
+                    schedule_ids = [sched.id for sched in current.schedule_ids]
+                    fnx_pd_schedule.write(cr, uid, schedule_ids,
                             {'schedule_date': date, 'schedule_seq':0}, context=context)
                     if current.confirmed:
                         state = 'needs_schedule'
@@ -396,7 +397,6 @@ class fnx_pd_schedule(osv.Model):
             ids = [ids]
         fnx_pd_order = self.pool.get('fnx.pd.order')
         states = dict([(v, n) for (v, n) in fnx_pd_order._columns['state'].selection])
-        print states
         values = {}
         for record in self.browse(cr, uid, ids, context=context):
             values[record.id] = states[record.order_id.state]
