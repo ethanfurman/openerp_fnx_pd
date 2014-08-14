@@ -14,7 +14,7 @@ class fnx_pd_order(osv.Model):
     _name = 'fnx.pd.order'
     _description = 'production order'
     _inherit = ['mail.thread']
-    _order = 'order_no asc'
+    _order = 'order_no desc'
     _rec_name = 'order_no'
     _mail_flat_thread = False
     
@@ -124,14 +124,34 @@ class fnx_pd_order(osv.Model):
             fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
             for id in ids:
                 current = self.browse(cr, uid, id, context=context)
-                if date > min([sched.schedule_date for sched in current.schedule_ids]):
-                    schedule_ids = [sched.id for sched in current.schedule_ids]
-                    fnx_pd_schedule.write(cr, uid, schedule_ids,
-                            {'schedule_date': date, 'schedule_seq':0}, context=context)
-                    if current.confirmed:
-                        state = 'needs_schedule'
-                    else:
-                        state = 'draft'
+                current_scheduled = [sched.schedule_date for sched in current.schedule_ids]
+                try:
+                    if not current_scheduled:
+                        # create schedule entry
+                        sched_vals = {
+                                'name': '%s - [%s] %s' % (current.order_no, current.item_id.xml_id, current.item_id.name),
+                                'schedule_date': date,
+                                'qty': current.qty,
+                                'order_id': current.id,
+                                'line_id': values['line_id'],
+                                'item_id': values['item_id'],
+                                }
+                        sched_id = fnx_pd_schedule.create(cr, uid, sched_vals, context=context)
+                        if current.confirmed:
+                            state = 'needs_schedule'
+                        else:
+                            state = 'draft'
+                    elif date > min(current_scheduled):
+                        schedule_ids = [sched.id for sched in current.schedule_ids]
+                        fnx_pd_schedule.write(cr, uid, schedule_ids,
+                                {'schedule_date': date, 'schedule_seq':0}, context=context)
+                        if current.confirmed:
+                            state = 'needs_schedule'
+                        else:
+                            state = 'draft'
+                except ValueError:
+                    print current_scheduled
+                    raise
         if state is not None:
             wf = self.WORKFLOW[state]
             wf(self, cr, uid, ids, context=context)
@@ -420,7 +440,7 @@ class fnx_pd_schedule(osv.Model):
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', domain="[('name','!=','Open')]"),
         'qty': fields.integer('Quantity'),
         'state': fields.selection([
-            ('dormant','Not Running'),
+            ('dormant',''),
             ('running','Running'),
             ('complete','Done'),
             ],
