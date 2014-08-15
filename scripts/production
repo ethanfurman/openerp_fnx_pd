@@ -113,10 +113,15 @@ def import_spreadsheet(OE, file_name):
                 OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
                 OE.fnx_pd_order.create(dict(data))
-    oe_open_orders = get_records(OE, 'fnx.pd.order', domain=[('state','not in',['complete','cancelled'])])
-    for order in oe_open_orders:
-        if order.order_no not in imported_orders:
-            OE.fnx_pd_order.write(order.id, {'state':'complete'})
+    oe_open_orders = [o.id for o in get_records(
+            OE,
+            'fnx.pd.order',
+            fields=['id'],
+            domain=[('order_no','not in',imported_orders),('state','not in',['closed','cancelled'])],
+            )]
+    print repr(oe_open_orders)
+    if oe_open_orders:
+        OE.fnx_pd_order.pd_update_state(oe_open_orders, context={'dropped':True})
     return errors
 
 

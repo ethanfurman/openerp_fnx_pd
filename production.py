@@ -35,9 +35,12 @@ class fnx_pd_order(osv.Model):
             ('ready', 'Ready'),
             ('running', 'In Progress'),
             ('complete', 'Complete'),
+            ('closed', 'Complete'),
             ('cancelled', 'Cancelled'),
             ],
             'Status'),
+        'completed_date': fields.date('Finished on'),
+        'completed_qty': fields.integer('Total produced'),
         }
 
     _sql_constraint = [
@@ -279,8 +282,10 @@ class fnx_pd_order(osv.Model):
         return False
 
     def pd_update_state(self, cr, uid, ids, context=None):
+        print 'fnx.pd.order.pd_update_state()'
         if context is None:
             context = {}
+        dropped = context.get('dropped')
         if isinstance(ids, (int, long)):
             ids = [ids]
         context['from_workflow'] = True
@@ -288,12 +293,28 @@ class fnx_pd_order(osv.Model):
         for id in ids:
             values = {}
             current = self.browse(cr, uid, id, context=context)
-            if all(sched.state == 'complete' for sched in current.schedule_ids):
-                state = 'complete'
+            if dropped or all(sched.state == 'complete' for sched in current.schedule_ids):
+                print '  dropped or complete'
+                values['completed_qty'] = sum([sched.qty for sched in current.schedule_ids])
+                values['completed_date'] = Date.today()
+                if values['completed_qty'] == 0:
+                    state = 'cancelled'
+                    sched_state = 'cancelled' # only needed if dropped
+                else:
+                    state = 'complete'
+                    sched_state = 'closed' # only needed if dropped
+                if dropped:
+                    print '    dropped'
+                    # mark all schedules as 'closed' or 'cancelled'
+                    fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
+                    sched_ids = [s.id for s in current.schedule_ids]
+                    ctx = context.copy()
+                    ctx['from_pd_update_state'] = True
+                    fnx_pd_schedule.write(cr, uid, sched_ids, {'state':sched_state}, context=ctx)
             elif any(sched.state == 'running' for sched in current.schedule_ids):
                 state = 'running'
             elif all(sched.schedule_seq for sched in current.schedule_ids) \
-              and sum(sched.qty for sched in current.schedule_ids) == current.qty:
+              and sum(sched.qty for sched in current.schedule_ids) >= current.qty:
                 if current.confirmed:
                     state = 'ready'
                 else:
@@ -369,9 +390,6 @@ fnx_pd_order()
 
 
 class fnx_pd_schedule(osv.Model):
-    _name = 'fnx.pd.schedule'
-    _description = 'production schedule'
-    _order = 'schedule_date asc, schedule_seq asc'
 
     def _generate_order_by(self, order_spec, query):
         "correctly orders state field if state is in query"
@@ -432,6 +450,10 @@ class fnx_pd_schedule(osv.Model):
         new_total = current_total - current.qty + proposed.qty
         return new_total
 
+    _name = 'fnx.pd.schedule'
+    _description = 'production schedule'
+    _order = 'schedule_date asc, schedule_seq asc'
+
     _columns= {
         'name': fields.char(string="Order / Product", size=64),
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
@@ -443,6 +465,8 @@ class fnx_pd_schedule(osv.Model):
             ('dormant',''),
             ('running','Running'),
             ('complete','Done'),
+            ('cancelled', 'Cancelled'),
+            ('closed', 'Closed'),   # controlling order has been completed
             ],
             'Status',
             ),
@@ -487,7 +511,11 @@ class fnx_pd_schedule(osv.Model):
         return True
 
     def write(self, cr, uid, ids, values, context=None):
-        if ids:
+        if context:
+            print 'fnx.pd.schedule.write():\n  values -> %r\n  context -> %r' % (values, context)
+        if context is None:
+            context = {}
+        if ids and not context.get('from_pd_update_state'):
             if isinstance(ids, (int, long)):
                 ids = [ids]
             if context is None:
