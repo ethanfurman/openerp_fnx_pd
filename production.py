@@ -17,6 +17,16 @@ class fnx_pd_order(osv.Model):
     _order = 'order_no desc'
     _rec_name = 'order_no'
     _mail_flat_thread = False
+
+    def _get_total_produced(self, cr, uid, ids, field_name, arg, context=None):
+        res = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        for current in self.browse(cr, uid, ids, context=context):
+            productive_runs = [run for run in current.schedule_ids if run.state in ('complete', 'closed')]
+            produced = sum([run.qty for run in productive_runs])
+            res[current.id] = produced
+        return res
     
     _columns = {
         'order_no': fields.char('Order #', size=12, required=True),
@@ -40,7 +50,12 @@ class fnx_pd_order(osv.Model):
             ],
             'Status'),
         'completed_date': fields.date('Finished on'),
-        'completed_qty': fields.integer('Total produced'),
+        'completed_qty': fields.function(
+            _get_total_produced,
+            type="integer",
+            string='Total produced',
+            method=True,
+            ),
         }
 
     _sql_constraint = [
@@ -48,7 +63,7 @@ class fnx_pd_order(osv.Model):
         ]
 
     _defaults = {
-        'state': lambda *a, **kw: 'draft',
+        'state': lambda *a: 'draft',
         }
 
     def _generate_order_by(self, order_spec, query):
@@ -282,7 +297,6 @@ class fnx_pd_order(osv.Model):
         return False
 
     def pd_update_state(self, cr, uid, ids, context=None):
-        print 'fnx.pd.order.pd_update_state()'
         if context is None:
             context = {}
         dropped = context.get('dropped')
@@ -290,27 +304,28 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         context['from_workflow'] = True
         context['mail_create_nosubscribe'] = True
-        for id in ids:
+        for current in self.browse(cr, uid, ids, context=context):
             values = {}
-            current = self.browse(cr, uid, id, context=context)
             if dropped or all(sched.state == 'complete' for sched in current.schedule_ids):
-                print '  dropped or complete'
-                values['completed_qty'] = sum([sched.qty for sched in current.schedule_ids])
                 values['completed_date'] = Date.today()
-                if values['completed_qty'] == 0:
+                if current.completed_qty == 0:
                     state = 'cancelled'
                     sched_state = 'cancelled' # only needed if dropped
                 else:
                     state = 'complete'
                     sched_state = 'closed' # only needed if dropped
                 if dropped:
-                    print '    dropped'
                     # mark all schedules as 'closed' or 'cancelled'
-                    fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
-                    sched_ids = [s.id for s in current.schedule_ids]
+                    # if current state is not 'complete', change qty to 0
+                    #fnx_pd_schedule = self.pool.get('fnx.pd.schedule')
                     ctx = context.copy()
                     ctx['from_pd_update_state'] = True
-                    fnx_pd_schedule.write(cr, uid, sched_ids, {'state':sched_state}, context=ctx)
+                    for schedule in current.schedule_ids:
+                        if schedule.state == 'complete':
+                            qty = schedule.qty
+                        else:
+                            qty = 0
+                        schedule.write({'state':sched_state, 'qty':qty}, context=ctx)
             elif any(sched.state == 'running' for sched in current.schedule_ids):
                 state = 'running'
             elif all(sched.schedule_seq for sched in current.schedule_ids) \
@@ -327,7 +342,7 @@ class fnx_pd_order(osv.Model):
             line_xml_ids = [(sched.line_id.xml_id, sched.line_id.id) for sched in current.schedule_ids]
             if line_xml_ids:
                 values['line_id'] = min(line_xml_ids)[1]
-            if not self.write(cr, uid, id, values, context=context):
+            if not current.write(values, context=context):
                 return False
         return True
 
@@ -403,13 +418,10 @@ class fnx_pd_schedule(osv.Model):
             order_by = order_by.replace('"%s"."state" ' % self._table, state_order)
         return order_by
 
-    def _get_schedule_ids_for_order(self, cr, uid, ids, context=None):
-        schedule_ids = []
-        fnx_pd_order = self.pool.get('fnx.pd.order')
-        orders = fnx_pd_order.browse(cr, uid, ids, context=context)
-        for order in orders:
-            schedule_ids.extend(schedule.id for schedule in order.schedule_ids)
-        return schedule_ids
+    def _get_schedule_ids_for_order(fnx_pd_order, cr, uid, ids, context=None):
+        if not isinstance(ids, (int, long)):
+            [ids] = ids
+        return [s.id for s in fnx_pd_order.browse(cr, uid, ids, context=context).schedule_ids]
 
     def _insert_order_in_sequence(self, cr, uid, id, proposed, context=None):
         if context is None:
@@ -511,8 +523,6 @@ class fnx_pd_schedule(osv.Model):
         return True
 
     def write(self, cr, uid, ids, values, context=None):
-        if context:
-            print 'fnx.pd.schedule.write():\n  values -> %r\n  context -> %r' % (values, context)
         if context is None:
             context = {}
         if ids and not context.get('from_pd_update_state'):
