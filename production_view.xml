@@ -107,6 +107,9 @@
                     <field name="coating" string="Coating" />
                     <field name="allergens" string="Allergens" />
                     <separator/>
+                    <filter string="Open" name="type_open" domain="[('state','in',['draft','scheduled','needs_schedule','partial','ready','running'])]"/>
+                    <filter string="Closed" name="type_closed" domain="[('state','in',['complete','closed','cancelled'])]"/>
+                    <separator/>
                     <filter string="Unscheduled" name="type_draft" domain="[('state','=','draft')]"/>
                     <filter string="Scheduled" name="type_scheduled" domain="[('state','=','scheduled')]"/>
                     <filter string="Ready, Needs Schedule" name="type_need_schedule" domain="[('state','=','needs_schedule')]"/>
@@ -130,6 +133,7 @@
             <field name="view_id" ref="fnx_pd_order_tree"/>
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="search_fnx_pd_orders"/>
+            <field name="context" eval="{'search_default_type_open':1}"/>
             <field name="limit" eval="200"/>
         </record>
 
@@ -141,7 +145,7 @@
             />
 
         <menuitem
-            name="All Orders"
+            name="Orders"
             id="menu_item_fnx_pd_orders_all"
             parent="menu_fnx_pd_orders"
             sequence="40"
