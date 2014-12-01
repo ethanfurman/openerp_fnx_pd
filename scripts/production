@@ -5,7 +5,7 @@ from scription import Script, Command, Run, mail
 from syslog import syslog
 from VSS import Date, fix_date
 from VSS.openerp import get_records
-from VSS.path import Path, listdir, glob
+from VSS.path import Path
 from VSS.time_machine import PropertyDict
 from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
@@ -47,7 +47,7 @@ class MissingPartner(Exception):
 def archive(src_file, dest=ARCHIVE):
     src_file = Path(src_file)
     basename = src_file.filename.split('_')[0]
-    existing = glob(dest/basename+'*')
+    existing = dest.glob(basename+'*')
     existing.sort()
     if not existing or '_' not in existing[-1]:
         dst_file = dest/basename + '_01'
@@ -77,7 +77,11 @@ def import_spreadsheet(OE, file_name):
     imported_orders = []   # list of imported current orders so that non-current orders still on file can be flagged completed
     line_ids = PropertyDict((r.xml_id, r) for r in get_records(OE, 'fis_integration.production_line', fields=['id','xml_id']))
     with open_workbook(file_name) as work_book:
-        sheet = work_book[2]
+        for sheet in work_book:
+            if sheet.name.lower() == '21 day production schedule':
+                break
+        else:
+            raise ValueError('Unable to find <21 Day Production Schedule> in %r' % file_name)
         last_row = None
         for row in sheet.rows(start_row=1):
             if row == last_row:
@@ -131,7 +135,7 @@ def update_order(values):
 
 
 @Command(
-        values=('settings to use', 'keyword', ),
+        values=('settings to use', ),
         hostname=('host where OpenERP instance is running', ),
         db=('database to use', ),
         login=('login name to use', ),
