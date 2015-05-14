@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 from math import ceil
-from scription import Script, Command, Main, mail
+from scription import Script, Command, Main, mail, print, stderr
 from syslog import syslog
 from VSS import Date, fix_date
 from VSS.openerp import get_records
@@ -83,7 +84,7 @@ def import_spreadsheet(OE, file_name):
         else:
             raise ValueError('Unable to find <21 Day Production Schedule> in %r' % file_name)
         last_row = None
-        for row in sheet.rows(start_row=1):
+        for i, row in enumerate(sheet.rows(start_row=1), start=1):
             if row == last_row:
                 continue
             followers = get_records(OE, 'res.users', fields=['id'], domain=[('login','=',row[email])], max_qty=1)
@@ -91,20 +92,37 @@ def import_spreadsheet(OE, file_name):
             item = get_records(OE, 'product.product', fields=['id'], domain=[('xml_id','=',row[item_code])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
-                errors.append('order %s: product %s not found' % (row[order_num], row[item_code]))
+                errors.append('<row %3d> order %s: product %s not found' % (i, row[order_num], row[item_code]))
                 continue
             item = item[0].id
             data = PropertyDict()
             data.follower_ids = followers
             data.dept = row[dept]
             # the value of row[prod_line] should be the textual representation of an integer between '01' and '99'
-            prod_id = '%02d' % int(row[prod_line])
+            try:
+                prod_id = '%02d' % int(row[prod_line])
+            except ValueError:
+                # no product line, record the error
+                errors.append('<row %3d> order %s: no product line' % (i, row[order_num]))
+                continue
             data.line_id = line_ids[prod_id].id
             data.item_id = item
             data.order_no = row[order_num]
             data.confirmed = row[confirmed] == 'Y'
-            data.qty = int(ceil(float(row[qty])))
-            sched_date = fix_date(row[date], format='ymd')
+            try:
+                data.qty = int(ceil(float(row[qty])))
+            except ValueError:
+                # no product line, record the error
+                errors.append('<row %3d> order %s: no order quantity' % (i, row[order_num]))
+                continue
+            try:
+                sched_date = fix_date(row[date], format='ymd')
+            except ValueError:
+                sched_date = ''
+            if not sched_date:
+                # no schedule date, record the error
+                errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, row[order_num]))
+                continue
             if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                 continue
             imported_orders.append(data.order_no)
@@ -172,9 +190,25 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
         for file in trying:
             errors = import_spreadsheet(OE, file)
             if errors:
-                raise ValueError("Unable to process orders:\n\t%s" % '\n\t'.join(errors))
-            #archive(file, dest)
+                [fnxpd_manager] = get_records(OE, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
+                [fnxpd_manager_group] = get_records(OE, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
+                managers = get_records(OE, 'res.users', domain=[('id','=',fnxpd_manager_group.users)], fields=['id','login','email'])
+                emails = [mgr.email for mgr in managers if mgr.id != 1]
+                mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
+                if mail_errors:
+                    print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
+                raise SystemExit("errors during processing, mail attempted")
     if failed:
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
+
+process_failure_mail = """\
+To: %s
+From: FnxPD <noreply@sunridgefarms.com>
+Subject: Failures during processing of QALL spreadsheet
+
+The following errors were detected during nightly processing:
+
+%s
+"""
 
 Main()
