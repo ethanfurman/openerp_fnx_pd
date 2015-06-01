@@ -19,10 +19,10 @@
             'product',
         ],
     'data': [
-            'security/security.xml',
+            'security/fnxpd_security.xaml',
             'security/ir.model.access.csv',
-            'product_view.xml',
-            'production_view.xml',
+            'product_view.xaml',
+            'production_view.xaml',
         ],
     'test': [],
     'installable': True,
