@@ -5,6 +5,7 @@ from math import ceil
 from scription import Script, Command, Main, mail, print, stderr
 from syslog import syslog
 from VSS import Date, fix_date
+from VSS.BBxXlate.fisData import fisData
 from VSS.openerp import get_records
 from VSS.path import Path
 from VSS.time_machine import PropertyDict
@@ -35,7 +36,7 @@ globals().update(ProductionState.__members__)
 
 QAll_C = IndexEnum(
     'QAll_C',
-    zip("header email dept prod_line type item_code item_desc order_num confirmed qty date day coating allergens".split(), range(100)),
+    zip("HEADER EMAIL DEPT PROD_LINE TYPE ITEM_CODE ITEM_DESC ORDER_NUM CONFIRMED QTY DATE DAY COATING ALLERGENS".split(), range(100)),
     )
 globals().update(QAll_C.__members__)
 
@@ -44,6 +45,21 @@ class BadFormat(Exception):
 
 class MissingPartner(Exception):
     "unable to find partner"
+
+# more values to know about
+class FISenum(str, Enum):
+    pass
+
+class F328(FISenum):
+    "Sales Order Production Pending codes"
+    company_id = 'An$(1,2)'
+    order_no = 'An$(3,6)'
+    status = 'Bn$(8,1)'          # Y on N = unknown; P = produced; X = cancelled
+    confirmed = 'Bn$(13,1)'     # Y = confirmed
+    product = 'Cn$(1,8)'
+    dept_code = 'Cn$(157,2)'
+    prod_line = 'Cn$(159,2)'
+    units_produced = 'Ln'
 
 def archive(src_file, dest=ARCHIVE):
     src_file = Path(src_file)
@@ -60,6 +76,7 @@ def archive(src_file, dest=ARCHIVE):
 
 def connect(hostname, database, user, password):
     OE = PropertyDict()
+    print('connecting to %s:%s' % (hostname, database))
     OE.conn = conn = openerplib.get_connection(hostname=hostname, database=database, login=user, password=password)
     return OE
 
@@ -74,8 +91,10 @@ def get_order(order):
     return PropertyDict(g['order'])
 
 def import_spreadsheet(OE, file_name):
+    fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
-    imported_orders = []   # list of imported current orders so that non-current orders still on file can be flagged completed
+    imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
+    completed_orders = []   # list of orders that are marked completed in FIS
     line_ids = PropertyDict((r.xml_id, r) for r in get_records(OE, 'fis_integration.production_line', fields=['id','xml_id']))
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
@@ -87,64 +106,115 @@ def import_spreadsheet(OE, file_name):
         for i, row in enumerate(sheet.rows(start_row=1), start=1):
             if row == last_row:
                 continue
-            followers = get_records(OE, 'res.users', fields=['id'], domain=[('login','=',row[email])], max_qty=1)
+            print('processing row %d, order %s' % (i, row[ORDER_NUM]), verbose=2)
+            followers = get_records(OE, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
             followers = [rec.id for rec in followers] or False
-            item = get_records(OE, 'product.product', fields=['id'], domain=[('xml_id','=',row[item_code])], max_qty=1)
+            item = get_records(OE, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
-                errors.append('<row %3d> order %s: product %s not found' % (i, row[order_num], row[item_code]))
+                errors.append('<row %3d> order %s: product %s not found' % (i, row[ORDER_NUM], row[ITEM_CODE]))
+                print(errors[-1])
+                continue
+            try:
+                fis_row = fis_f328[row[ORDER_NUM]]
+            except KeyError:
+                print('  cannot find %s in FIS' % row[ORDER_NUM])
                 continue
             item = item[0].id
             data = PropertyDict()
             data.follower_ids = followers
-            data.dept = row[dept]
-            # the value of row[prod_line] should be the textual representation of an integer between '01' and '99'
+            data.dept = fis_row[F328.dept_code].strip()
+            # the value of row[PROD_LINE] should be the textual representation of an integer between '01' and '99'
             try:
-                prod_id = '%02d' % int(row[prod_line])
+                prod_id = '%02d' % int(fis_row[F328.prod_line])
             except ValueError:
                 # no product line, record the error
-                errors.append('<row %3d> order %s: no product line' % (i, row[order_num]))
+                errors.append('<row %3d> order %s: no product line' % (i, row[ORDER_NUM]))
+                print(errors[-1])
                 continue
             data.line_id = line_ids[prod_id].id
             data.item_id = item
-            data.order_no = row[order_num]
-            data.confirmed = row[confirmed] == 'Y'
+            data.order_no = row[ORDER_NUM]
+            data.confirmed = row[CONFIRMED] == 'Y'
             try:
-                data.qty = int(ceil(float(row[qty])))
+                data.qty = int(ceil(float(row[QTY])))
             except ValueError:
-                # no product line, record the error
-                errors.append('<row %3d> order %s: no order quantity' % (i, row[order_num]))
+                # no quantity, record the error
+                errors.append('<row %3d> order %s: no order quantity' % (i, row[ORDER_NUM]))
+                print(errors[-1])
                 continue
             try:
-                sched_date = fix_date(row[date], format='ymd')
+                sched_date = fix_date(row[DATE], format='ymd')
             except ValueError:
                 sched_date = ''
             if not sched_date:
                 # no schedule date, record the error
-                errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, row[order_num]))
+                errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, row[ORDER_NUM]))
+                print(errors[-1])
                 continue
             if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                print('skipping %s: Saturday schedule' % row[ORDER_NUM])
                 continue
             imported_orders.append(data.order_no)
             data.date = str(sched_date)
-            data.coating = row[coating]
-            data.allergens = row[allergens]
+            data.coating = row[COATING].strip()
+            data.allergens = row[ALLERGENS].strip()
             current_record = get_records(OE, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_record:
+                print('  checking for changed fields', verbose=2)
+                del data.follower_ids
+                del data.dept
+                del data.line_id
+                del data.order_no
                 current_record = current_record[0]
-                if row[prod_line] == '98':
-                    del data.line_id
-                OE.fnx_pd_order.write(current_record.id, dict(data))
+                if (
+                        data.qty != current_record.qty or
+                        data.coating != current_record.coating or
+                        data.allergens != current_record.allergens or
+                        data.confirmed != current_record.confirmed
+                    ):
+                    print('updating %s' % row[ORDER_NUM])
+                    for key in data:
+                        if key == 'date':
+                            continue
+                        elif key == 'item_id':
+                            if data[key] != current_record[key][0]:
+                                print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                        elif data[key] != current_record[key]:
+                            print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                    OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
+                print('creating %s' % row[ORDER_NUM])
                 OE.fnx_pd_order.create(dict(data))
-    oe_open_orders = [o.id for o in get_records(
+    oe_open_orders = get_records(
             OE,
             'fnx.pd.order',
-            fields=['id'],
-            domain=[('order_no','not in',imported_orders),('state','not in',['closed','cancelled'])],
-            )]
-    if oe_open_orders:
-        OE.fnx_pd_order.pd_update_state(oe_open_orders, context={'dropped':True})
+            fields=['id', 'order_no'],
+            domain=[('order_no','not in',imported_orders),('state','not in',['closed','cancelled']),'|',('state','=','closed'),('qty','=',0)],
+            )
+    print('checking open orders in OE')
+    for open_order in oe_open_orders:
+        fis_order = fis_f328[open_order.order_no]
+        values = {}
+        status = fis_order[F328.status]
+        if status == 'P':
+            state = 'complete'
+        elif status == 'X':
+            state = 'cancelled'
+        elif status in 'Y N':
+            # no action
+            continue
+        else:
+            # unknown, skip until tomorrow and hope somebody fixes it
+            print('order %s: unknown status %r' % (open_order.order_no, fis_order[F328.status]))
+            continue
+        values['state'] = state
+        if state == 'complete':
+            values['completed_fis_qty'] = fis_order[F328.units_produced]
+            # if values['qty'] == 0:
+                # do not update
+        print('updating %s: %s' % (open_order.order_no, values))
+        OE.fnx_pd_order.write([open_order.id], values, context={'dropped':True})
     return errors
 
 

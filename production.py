@@ -53,9 +53,10 @@ class fnx_pd_order(osv.Model):
         'completed_qty': fields.function(
             _get_total_produced,
             type="integer",
-            string='Total produced',
+            string='Total produced (calculated)',
             method=True,
             ),
+        'completed_fis_qty': fields.integer('Total produced (FIS)'),
         }
 
     _sql_constraint = [

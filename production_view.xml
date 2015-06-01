@@ -52,6 +52,7 @@
                             <group>
                                 <field name="completed_date" readonly="True"/>
                                 <field name="completed_qty" readonly="True"/>
+                                <field name="completed_fis_qty" readonly="True"/>
                             </group>
                         </group>
                         <group>
