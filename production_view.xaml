@@ -3,7 +3,7 @@
 %openerp
     %data
 
-        // Top menu item --
+        // Top menu item
         %menuitem @FnxPd #menu_fnx_pd_root groups='group_fnx_pd_manager,group_fnx_pd_user,group_fnx_pd_guest'
 
         %record model='ir.ui.view' #fnx_pd_order_tree
@@ -12,11 +12,11 @@
             @priority eval='10'
             @arch type='xml'
                 %tree string='Tree View' toolbar='1' create='false'
-                    @order_no: 
-                    @line_id: 
-                    @item_id: 
-                    @qty: 
-                    @state: 
+                    @order_no
+                    @line_id
+                    @item_id
+                    @qty
+                    @state
                 
         %record model='ir.ui.view' #fnx_pd_order_form
             @name: fnx_pd_order_form
@@ -50,18 +50,18 @@
                                 @allergens readwrite="groups('fnx_pd.group_fnx_pd_manager')"
                             %group
                                 @dept readwrite="groups('fnx_pd.group_fnx_pd_manager')"
-				// @line_id readwrite="groups('fnx_pd.group_fnx_pd_manager')"
+                                // @line_id readwrite="groups('fnx_pd.group_fnx_pd_manager')"
                             %group
-                                @qty: 
+                                @qty
                         %notebook
                             %page string='Production Runs'
-                                @schedule_ids nolabel='1' readwrite='groups('fnx_pd.group_fnx_pd_user')'
+                                @schedule_ids nolabel='1' readwrite="groups('fnx_pd.group_fnx_pd_user')" context="{'default_order_id':active_id}"
                                     %tree string='Tree View' toolbar='1' editable='bottom'
                                         @state readonly='True'
-                                        @line_id readonly="[('status','in',['complete','cancelled'])]" options="{'create':False, 'create_edit':False}"
-                                        @schedule_date readonly="[('status','in',['complete','cancelled'])]"
-                                        @schedule_seq readonly="[('status','in',['complete','cancelled'])]"
-                                        @qty readonly="[('status','in',['complete','cancelled'])]"
+                                        @line_id attrs="{'readonly':[('state','!=','dormant')]}" options="{'create':False, 'create_edit':False}"
+                                        @schedule_date attrs="{'readonly':[('state','!=','dormant')]}"
+                                        @schedule_seq attrs="{'readonly':[('state','!=','dormant')]}"
+                                        @qty attrs="{'readonly':[('state','!=','dormant')]}"
                             %page string="Manager Overrides" visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 %separator string='Reset state to'
                                 %button string='Unscheduled' name='pd_draft' type='object' context="{'manager_override':True}"
@@ -98,7 +98,7 @@
                         %filter string='Coating' domain='[]' context="{'group_by': 'coating'}"
                         %filter string='Department' domain='[]' context="{'group_by': 'dept'}"
 
-        %record model="ir.actions.act_window" #action_fnx_pd_form_orders
+        %record model='ir.actions.act_window' #action_fnx_pd_form_orders
             @name: Orders
             @res_model: fnx.pd.order
             @view_type: form
@@ -106,7 +106,7 @@
             @view_mode: tree,form
             @search_view_id ref='search_fnx_pd_orders'
             @context eval="{'search_default_type_open':1}"
-            @limit eval="200"
+            @limit eval='200'
 
         %menuitem name='Orders' #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10'
 
@@ -123,7 +123,7 @@
                     @state readonly='check_context()'
                     @order_id readonly='True'
                     @line_id readonly='check_context()' options="{'create':False, 'create_edit':False}"
-                    @item_id readonly='True'
+                    @order_id.item_id readonly='True'
                     @schedule_date readonly='check_context()'
                     @schedule_seq readonly='check_context()'
                     @qty readonly='check_context()'
@@ -136,7 +136,7 @@
                     @order_id string='Orders' 
                     @schedule_date string='Dates' 
                     @line_id string='Production Line'
-                    @item_id string='Production Item'
+                    @order_id.item_id string='Production Item'
                     @order_status string='Order State'
                     %separator
                     %filter string='Cancelled' name='type_cancelled' domain="[('order_status','=','cancelled')]"
@@ -166,7 +166,7 @@
             @view_mode: tree
             @domain: [('state','not in',['cancelled','closed','complete'])]
             @search_view_id ref='search_fnx_pd_schedules'
-            @context eval="{'filter_default_group_line':1}"
+            @context eval="{'search_default_group_line':1}"
             @limit eval="500"
 
         %menuitem name='Schedules' #menu_fnx_pd_schedules parent='menu_fnx_pd_root' sequence='10'
@@ -200,7 +200,7 @@
                                 %tree editable='bottom'
                                     @order_status
                                     @order_id readonly='True'
-                                    @item_id readonly='True'
+                                    @order_id.item_id readonly='True'
                                     @schedule_date
                                     @schedule_seq
                                     @qty
@@ -213,9 +213,4 @@
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
 
-        %menuitem
-            name='Production Lines'
-            #menu_fnx_pd_production_lines
-            parent='menu_fnx_pd_resources'
-            sequence='10'
-            action='action_fnx_pd_production_line'
+        %menuitem name='Production Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_resources' sequence='10' action='action_fnx_pd_production_line'

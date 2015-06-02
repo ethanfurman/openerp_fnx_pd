@@ -18,6 +18,55 @@ class fnx_pd_order(osv.Model):
     _rec_name = 'order_no'
     _mail_flat_thread = False
 
+    def _adjust_qty(self, cr, uid, ids, qty, date, context=None):
+        if context is None:
+            context = {}
+        ctx = context.copy()
+        ctx['from_pd_update_state'] = True
+        for order in self.browse(cr, uid, ids, context=ctx):
+            all_scheduled = [
+                    sched for sched in 
+                    sorted(order.schedule_ids, key=lambda s: (s.schedule_date, s.schedule_seq))
+                    ]
+            active_scheduled = [
+                    sched for sched in all_scheduled
+                    if sched.state == 'dormant'
+                    ]
+            latest_date = all_scheduled.pop().schedule_date
+            change = qty - order.qty
+            if change == 0:
+                return
+            # positive -> increase/create last schedule
+            # negative -> decrease/delete schedules
+            if change > 0:
+                if not active_scheduled:
+                    # create schedule entry
+                    sched_vals = {
+                            'name': '%s - [%s] %s' % (order.order_no, order.item_id.xml_id, order.item_id.name),
+                            'schedule_date': latest_date,
+                            'qty': change,
+                            'order_id': order.id,
+                            'line_id': order.line_id,
+                            'item_id': order.item_id,
+                            }
+                    sched_id = fnx_pd_schedule.create(cr, uid, sched_vals, context=ctx)
+                else:
+                    # increase
+                    sched = active_scheduled.pop()
+                    sched.write({'qty':sched.qty + change})
+            else:
+                change = -change
+                while change > 0 and active_scheduled:
+                    # reduce/delete schedules until change is zero or all schedules deleted
+                    sched = active_scheduled.pop()
+                    if sched.qty > change:
+                        sched.write({'qty':sched.qty-change})
+                        return
+                    else:
+                        change -= sched.qty
+                        sched.unlink(context=context)
+
+
     def _get_total_produced(self, cr, uid, ids, field_name, arg, context=None):
         res = {}
         if isinstance(ids, (int, long)):
@@ -136,6 +185,9 @@ class fnx_pd_order(osv.Model):
         state = None
         if not context.pop('from_workflow', False):
             state = values.pop('state', None)
+        # adjust dependent schedules if qty has changed
+        if 'qty' in values:
+            self._adjust_qty(cr, uid, ids, values['qty'] or 0, date, context=context)
         # write data to record
         result = super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
         # check schedule to see if new date is later than existing dates
@@ -169,7 +221,7 @@ class fnx_pd_order(osv.Model):
                         else:
                             state = 'draft'
                 except ValueError:
-                    print current_scheduled
+                    _logger.error('current_scheduled: %r', current_scheduled)
                     raise
         if state is not None:
             wf = self.WORKFLOW[state]
@@ -278,19 +330,39 @@ class fnx_pd_order(osv.Model):
         return True
 
     def pd_complete(self, cr, uid, ids, context=None):
-        "only called by manager override"
-        if context is None:
-            context = {}
-        context['from_workflow'] = True
-        return self.write(cr, uid, ids, {'state':'complete'}, context=context)
-
-    def pd_cancel(self, cr, uid, ids, context=None):
-        "only called by manager override"
+        "called by manager override or production script"
         if context is None:
             context = {}
         if isinstance(ids, (int, long)):
             ids = [ids]
         context['from_workflow'] = True
+        for current in self.browse(cr, uid, ids, context=context):
+            values = {}
+            ctx = context.copy()
+            ctx['from_pd_update_state'] = True
+            for schedule in current.schedule_ids:
+                if schedule.state == 'complete':
+                    continue
+                schedule.write({'state':'closed'}, context=ctx)
+        return self.write(cr, uid, ids, {'state':'complete'}, context=context)
+
+    def pd_cancel(self, cr, uid, ids, context=None):
+        "called by manager override or production script"
+        if context is None:
+            context = {}
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        context['from_workflow'] = True
+        for current in self.browse(cr, uid, ids, context=context):
+            values = {}
+            ctx = context.copy()
+            ctx['from_pd_update_state'] = True
+            for schedule in current.schedule_ids:
+                if schedule.state == 'closed':
+                    continue
+                else:
+                    qty = 0
+                schedule.write({'state':'cancelled', 'qty':qty}, context=ctx)
         if self.write(cr, uid, ids, {'state':'cancelled'}, context=context):
             context['mail_create_nosubscribe'] = True
             self.message_post(cr, uid, ids, body='Order cancelled.', context=context)
@@ -402,9 +474,6 @@ class fnx_pd_order(osv.Model):
         }
 
 
-fnx_pd_order()
-
-
 class fnx_pd_schedule(osv.Model):
 
     def _generate_order_by(self, order_spec, query):
@@ -420,9 +489,19 @@ class fnx_pd_schedule(osv.Model):
         return order_by
 
     def _get_schedule_ids_for_order(fnx_pd_order, cr, uid, ids, context=None):
-        if not isinstance(ids, (int, long)):
-            [ids] = ids
-        return [s.id for s in fnx_pd_order.browse(cr, uid, ids, context=context).schedule_ids]
+        single = False
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+            single = True
+        if len(ids) == 1:
+            single = True
+        result = {}
+        for id in ids:
+            result[id] = [s.id for s in fnx_pd_order.browse(cr, uid, id, context=context).schedule_ids]
+        if single:
+            return result.popitem()[1]
+        else:
+            return result
 
     def _insert_order_in_sequence(self, cr, uid, id, proposed, context=None):
         if context is None:
@@ -466,6 +545,7 @@ class fnx_pd_schedule(osv.Model):
     _name = 'fnx.pd.schedule'
     _description = 'production schedule'
     _order = 'schedule_date asc, schedule_seq asc'
+    _mirrors = {'order_id': ['item_id'] }
 
     _columns= {
         'name': fields.char(string="Order / Product", size=64),
@@ -492,7 +572,6 @@ class fnx_pd_schedule(osv.Model):
                 },
             string='Order State',
             ),
-        'item_id': fields.many2one('product.product', 'Item', required=True),
         }
 
     _defaults = {
@@ -550,7 +629,7 @@ class fnx_pd_schedule(osv.Model):
                 new_qty = master.qty - new_total
             fnx_pd_order.pd_update_state(cr, uid, [order_id], context=context)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context)
-fnx_pd_schedule()
+
 
 class production_line(osv.Model):
     "production line"
@@ -564,4 +643,3 @@ class production_line(osv.Model):
             'Scheduled Runs',
             ),
         }
-production_line()
