@@ -6,12 +6,10 @@ from scription import Script, Command, Main, mail, print, stderr
 from syslog import syslog
 from VSS import Date, fix_date
 from VSS.BBxXlate.fisData import fisData
-from VSS.openerp import get_records
 from VSS.path import Path
-from VSS.time_machine import PropertyDict
 from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
-import openerplib
+from openerplib import AttrDict, get_connection, get_records
 import shutil
 import time
 
@@ -75,9 +73,9 @@ def archive(src_file, dest=ARCHIVE):
     shutil.move(src_file, dst_file)
 
 def connect(hostname, database, user, password):
-    OE = PropertyDict()
+    OE = AttrDict()
     print('connecting to %s:%s' % (hostname, database))
-    OE.conn = conn = openerplib.get_connection(hostname=hostname, database=database, login=user, password=password)
+    OE.conn = conn = get_connection(hostname=hostname, database=database, login=user, password=password)
     return OE
 
 def get_files(source=SOURCE):
@@ -88,14 +86,14 @@ def get_files(source=SOURCE):
 def get_order(order):
     g = {}
     execfile(order, g)
-    return PropertyDict(g['order'])
+    return AttrDict(g['order'])
 
 def import_spreadsheet(OE, file_name):
     fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
     imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
     completed_orders = []   # list of orders that are marked completed in FIS
-    line_ids = PropertyDict((r.xml_id, r) for r in get_records(OE, 'fis_integration.production_line', fields=['id','xml_id']))
+    line_ids = AttrDict((r.xml_id, r) for r in get_records(OE.conn, 'fis_integration.production_line', fields=['id','xml_id']))
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -107,9 +105,9 @@ def import_spreadsheet(OE, file_name):
             if row == last_row:
                 continue
             print('processing row %d, order %s' % (i, row[ORDER_NUM]), verbose=2)
-            followers = get_records(OE, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
+            followers = get_records(OE.conn, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
             followers = [rec.id for rec in followers] or False
-            item = get_records(OE, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
+            item = get_records(OE.conn, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
                 errors.append('<row %3d> order %s: product %s not found' % (i, row[ORDER_NUM], row[ITEM_CODE]))
@@ -121,7 +119,7 @@ def import_spreadsheet(OE, file_name):
                 print('  cannot find %s in FIS' % row[ORDER_NUM])
                 continue
             item = item[0].id
-            data = PropertyDict()
+            data = AttrDict()
             data.follower_ids = followers
             data.dept = fis_row[F328.dept_code].strip()
             # the value of row[PROD_LINE] should be the textual representation of an integer between '01' and '99'
@@ -159,7 +157,7 @@ def import_spreadsheet(OE, file_name):
             data.date = str(sched_date)
             data.coating = row[COATING].strip()
             data.allergens = row[ALLERGENS].strip()
-            current_record = get_records(OE, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
+            current_record = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_record:
                 print('  checking for changed fields', verbose=2)
                 del data.follower_ids
@@ -187,10 +185,10 @@ def import_spreadsheet(OE, file_name):
                 print('creating %s' % row[ORDER_NUM])
                 OE.fnx_pd_order.create(dict(data))
     oe_open_orders = get_records(
-            OE,
+            OE.conn,
             'fnx.pd.order',
             fields=['id', 'order_no'],
-            domain=[('order_no','not in',imported_orders),('state','not in',['closed','cancelled']),'|',('state','=','closed'),('qty','=',0)],
+            domain=['|','&',('order_no','not in',imported_orders),('state','not in',['closed','cancelled']),'&',('state','=','closed'),('qty','=',0)],
             )
     print('checking open orders in OE')
     for open_order in oe_open_orders:
@@ -211,8 +209,6 @@ def import_spreadsheet(OE, file_name):
         values['state'] = state
         if state == 'complete':
             values['completed_fis_qty'] = fis_order[F328.units_produced]
-            # if values['qty'] == 0:
-                # do not update
         print('updating %s: %s' % (open_order.order_no, values))
         OE.fnx_pd_order.write([open_order.id], values, context={'dropped':True})
     return errors
@@ -260,9 +256,9 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
         for file in trying:
             errors = import_spreadsheet(OE, file)
             if errors:
-                [fnxpd_manager] = get_records(OE, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
-                [fnxpd_manager_group] = get_records(OE, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
-                managers = get_records(OE, 'res.users', domain=[('id','=',fnxpd_manager_group.users)], fields=['id','login','email'])
+                [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
+                [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
+                managers = get_records(OE.conn, 'res.users', domain=[('id','=',fnxpd_manager_group.users)], fields=['id','login','email'])
                 emails = [mgr.email for mgr in managers if mgr.id != 1]
                 mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
                 if mail_errors:
