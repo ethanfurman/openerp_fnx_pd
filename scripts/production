@@ -192,9 +192,13 @@ def import_spreadsheet(OE, file_name):
             )
     print('checking open orders in OE')
     for open_order in oe_open_orders:
-        fis_order = fis_f328[open_order.order_no]
         values = {}
-        status = fis_order[F328.status]
+        try:
+            fis_order = fis_f328[open_order.order_no]
+        except KeyError:
+            status = 'X'
+        else:
+            status = fis_order[F328.status]
         if status == 'P':
             state = 'complete'
         elif status == 'X':
