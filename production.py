@@ -25,7 +25,7 @@ class fnx_pd_order(osv.Model):
         ctx['from_pd_update_state'] = True
         for order in self.browse(cr, uid, ids, context=ctx):
             all_scheduled = [
-                    sched for sched in 
+                    sched for sched in
                     sorted(order.schedule_ids, key=lambda s: (s.schedule_date, s.schedule_seq))
                     ]
             active_scheduled = [
@@ -76,7 +76,7 @@ class fnx_pd_order(osv.Model):
             produced = sum([run.qty for run in productive_runs])
             res[current.id] = produced
         return res
-    
+
     _columns = {
         'order_no': fields.char('Order #', size=12, required=True),
         'item_id': fields.many2one('product.product', 'Item', required=True),
@@ -613,8 +613,8 @@ class fnx_pd_schedule(osv.Model):
             fnx_pd_order = self.pool.get('fnx.pd.order')
             current = self.browse(cr, uid, ids[0], context=context)
             master = current.order_id
-            new_values = Proposed(self, values)
-            proposed = Proposed(self, values, current)
+            new_values = Proposed(self, cr, values, context=context)
+            proposed = Proposed(self, cr, values, current, context=context)
             if isinstance(proposed.order_id, (int, long)):
                 order_id = proposed.order_id
             else:
