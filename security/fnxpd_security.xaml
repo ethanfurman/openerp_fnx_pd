@@ -1,25 +1,25 @@
 !!!xml1.0
 
-%openerp
-    %data noupdate='0'
+~openerp
+    ~data noupdate='0'
 
-        %record model='ir.module.category' #module_fnx_pd
+        ~record model='ir.module.category' #module_fnx_pd
             @name: FnxPd
             @sequence: 18
             @description: Production Orders
 
-        %record model='res.groups' #group_fnx_pd_guest
+        ~record model='res.groups' #group_fnx_pd_guest
             @name: Guest
             @category_id ref='module_fnx_pd'
             @comment: The user has read-only acess.
 
-        %record model='res.groups' #group_fnx_pd_user
+        ~record model='res.groups' #group_fnx_pd_user
             @name: User
             @category_id ref='module_fnx_pd'
             @comment: The user normal access.
             @implied_ids eval="[(4, ref('group_fnx_pd_guest'))]"
 
-        %record model='res.groups' #group_fnx_pd_manager
+        ~record model='res.groups' #group_fnx_pd_manager
             @name: Manager
             @category_id ref='module_fnx_pd'
             @comment: The user has manager access.
