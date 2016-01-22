@@ -38,7 +38,7 @@
                                         @item_id attrs="{'readonly':True}" class='oe_inline' options="{'create':False, 'create_edit':False}"
                         ~group
                             ~group
-                                @confirmed readwrite="groups('fnx_pd.group_fnx_pd_manager')" colspan='2'
+                                @confirmed writeonly="groups('fnx_pd.group_fnx_pd_manager')" colspan='2'
                                 ~separator colspan='2'
                             ~group
                                 @completed_date readonly='True'
@@ -46,16 +46,16 @@
                                 @completed_fis_qty readonly='True'
                         ~group
                             ~group
-                                @coating readwrite="groups('fnx_pd.group_fnx_pd_manager')"
-                                @allergens readwrite="groups('fnx_pd.group_fnx_pd_manager')"
+                                @coating writeonly="groups('fnx_pd.group_fnx_pd_manager')"
+                                @allergens writeonly="groups('fnx_pd.group_fnx_pd_manager')"
                             ~group
-                                @dept readwrite="groups('fnx_pd.group_fnx_pd_manager')"
-                                // @line_id readwrite="groups('fnx_pd.group_fnx_pd_manager')"
+                                @dept writeonly="groups('fnx_pd.group_fnx_pd_manager')"
+                                // @line_id writeonly="groups('fnx_pd.group_fnx_pd_manager')"
                             ~group
                                 @qty
                         ~notebook
                             ~page string='Production Runs'
-                                @schedule_ids nolabel='1' readwrite="groups('fnx_pd.group_fnx_pd_user')" context="{'default_order_id':active_id}"
+                                @schedule_ids nolabel='1' writeonly="groups('fnx_pd.group_fnx_pd_user')" context="{'default_order_id':active_id}"
                                     ~tree string='Tree View' toolbar='1' editable='bottom'
                                         @state readonly='True'
                                         @line_id attrs="{'readonly':[('state','!=','dormant')]}" options="{'create':False, 'create_edit':False}"
