@@ -122,6 +122,9 @@ def import_spreadsheet(OE, file_name):
             data = AttrDict()
             data.follower_ids = followers
             data.dept = fis_row[F328.dept_code].strip()
+            if data.dept not in ('08', '11', '22'):
+                # skipping everything else whele we test system
+                continue
             # the value of row[PROD_LINE] should be the textual representation of an integer between '01' and '99'
             try:
                 prod_id = '%02d' % int(fis_row[F328.prod_line])
