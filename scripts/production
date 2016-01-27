@@ -2,10 +2,10 @@
 from __future__ import print_function
 
 from math import ceil
-from scription import Script, Command, Main, mail, print, stderr
+from scription import *
 from syslog import syslog
 from VSS import Date, fix_date
-from VSS.BBxXlate.fisData import fisData
+from VSS.BBxXlate import fisData
 from VSS.path import Path
 from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
@@ -19,6 +19,56 @@ ERRORS = Path('/var/openerp/archive/production/error')
 USER_PW_DB = Path('/etc/openerp/credentials')
 
 execfile(USER_PW_DB)
+
+
+@Command(
+        values=('settings to use', ),
+        hostname=('host where OpenERP instance is running', ),
+        db=('database to use', ),
+        login=('login name to use', ),
+        password=('password for login name', ),
+        )
+def manual_update(hostname='localhost', db=DB, login=USER, password=None, **values):
+    if password is None:
+        password = PW
+    OE = connect(hostname, db, login, password)
+    pass
+
+@Command(
+        file_to_process=('order to add/update in system', ),
+        hostname=('host where OpenERP instance is running', ),
+        db=('database to use', ),
+        login=('login name to use', ),
+        password=('password for login name', ),
+        )
+def process(file_to_process='', hostname='localhost', db=DB, login=USER, password=None):
+    "imports a production spreadsheet into FnxPd"
+    if password is None:
+        password = PW
+    if file_to_process:
+        files = [file_to_process]
+    else:
+        files = [f for f in get_files() if f.ext == '.xls']
+    OE = connect(hostname, db, login, password)
+    OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
+    retry = []
+    failed = []
+    for group in ((files, failed), ):
+        time.sleep(5)
+        trying, failing = group
+        for file in trying:
+            errors = import_spreadsheet(OE, file)
+            if errors:
+                [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
+                [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
+                managers = get_records(OE.conn, 'res.users', domain=[('id','=',fnxpd_manager_group.users)], fields=['id','login','email'])
+                emails = [mgr.email for mgr in managers if mgr.id != 1]
+                mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
+                if mail_errors:
+                    print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
+                raise SystemExit("errors during processing, mail attempted")
+    if failed:
+        raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
 module = {
     'incoming': 'F163',
@@ -51,10 +101,10 @@ class FISenum(str, Enum):
 class F328(FISenum):
     "Sales Order Production Pending codes"
     company_id = 'An$(1,2)'
-    order_no = 'An$(3,6)'
-    status = 'Bn$(8,1)'          # Y on N = unknown; P = produced; X = cancelled
+    order_id = 'An$(3,6)'
+    produced = 'Bn$(8,1)'          # Y = produced; N = not produced yet; P = partially produced; X = cancelled
     confirmed = 'Bn$(13,1)'     # Y = confirmed
-    product = 'Cn$(1,8)'
+    prod_no = 'Cn$(1,8)'
     dept_code = 'Cn$(157,2)'
     prod_line = 'Cn$(159,2)'
     units_produced = 'Ln'
@@ -89,7 +139,7 @@ def get_order(order):
     return AttrDict(g['order'])
 
 def import_spreadsheet(OE, file_name):
-    fis_f328 = fisData(328, keymatch='10%s000010000')
+    fis_f328 = fisData.fisData(328, keymatch='10%s000010000')
     errors = []
     imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
     completed_orders = []   # list of orders that are marked completed in FIS
@@ -196,19 +246,19 @@ def import_spreadsheet(OE, file_name):
         try:
             fis_order = fis_f328[open_order.order_no]
         except KeyError:
-            status = 'X'
+            status = 'N'
         else:
-            status = fis_order[F328.status]
-        if status == 'P':
+            status = fis_order[F328.produced]
+        if status == 'Y':
             state = 'complete'
         elif status == 'X':
             state = 'cancelled'
-        elif status in 'Y N':
+        elif status in 'P N':
             # no action
             continue
         else:
             # unknown, skip until tomorrow and hope somebody fixes it
-            print('order %s: unknown status %r' % (open_order.order_no, fis_order[F328.status]))
+            print('order %s: unknown status %r' % (open_order.order_no, fis_order[F328.produced]))
             continue
         values['state'] = state
         if state == 'complete':
@@ -221,55 +271,6 @@ def import_spreadsheet(OE, file_name):
 def update_order(values):
     pass
 
-
-@Command(
-        values=('settings to use', ),
-        hostname=('host where OpenERP instance is running', ),
-        db=('database to use', ),
-        login=('login name to use', ),
-        password=('password for login name', ),
-        )
-def manual_update(hostname='localhost', db=DB, login=USER, password=None, **values):
-    if password is None:
-        password = PW
-    OE = connect(hostname, db, login, password)
-    pass
-
-@Command(
-        file_to_process=('order to add/update in system', ),
-        hostname=('host where OpenERP instance is running', ),
-        db=('database to use', ),
-        login=('login name to use', ),
-        password=('password for login name', ),
-        )
-def process(file_to_process='', hostname='localhost', db=DB, login=USER, password=None):
-    "imports a production spreadsheet into FnxPd"
-    if password is None:
-        password = PW
-    if file_to_process:
-        files = [file_to_process]
-    else:
-        files = [f for f in get_files() if f.ext == '.xls']
-    OE = connect(hostname, db, login, password)
-    OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
-    retry = []
-    failed = []
-    for group in ((files, failed), ):
-        time.sleep(5)
-        trying, failing = group
-        for file in trying:
-            errors = import_spreadsheet(OE, file)
-            if errors:
-                [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
-                [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
-                managers = get_records(OE.conn, 'res.users', domain=[('id','=',fnxpd_manager_group.users)], fields=['id','login','email'])
-                emails = [mgr.email for mgr in managers if mgr.id != 1]
-                mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
-                if mail_errors:
-                    print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
-                raise SystemExit("errors during processing, mail attempted")
-    if failed:
-        raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
 process_failure_mail = """\
 To: %s
