@@ -4,7 +4,8 @@ from itertools import groupby
 from openerp.osv import fields, osv
 from openerp.tools import float_compare, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
 from openerp.tools.translate import _
-from fnx import Date, DateTime, Time, float, get_user_timezone, all_equal, PropertyDict, Proposed
+from fnx import Date, DateTime, Time, float, all_equal, PropertyDict
+from fnx.oe import get_user_timezone, Proposed
 import logging
 
 _logger = logging.getLogger(__name__)
