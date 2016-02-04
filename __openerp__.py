@@ -1,6 +1,6 @@
 {
     'name': 'Fnx Production',
-    'version': '0.1',
+    'version': '0.2',
     'category': 'Generic Modules',
     'description': """\
             Phoenix Production Orders.
@@ -21,6 +21,7 @@
     'data': [
             'security/fnxpd_security.xaml',
             'security/ir.model.access.csv',
+            'production_data.xaml',
             'product_view.xaml',
             'production_view.xaml',
         ],
