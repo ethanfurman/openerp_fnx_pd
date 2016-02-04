@@ -9,7 +9,13 @@ class product_product(osv.Model):
     _inherit = 'product.product'
 
     _columns = {
-        'prod_order_ids': fields.one2many('fnx.pd.order', 'item_id', 'Production Orders'),
+        'prod_order_ids': fields.one2many(
+            'fnx.pd.order',
+            'item_id',
+            string='Production Orders',
+            domain=[('state','not in',['complete','cancelled'])],
+            order='schedule_date, sequence',
+            ),
         }
 
 product_product()

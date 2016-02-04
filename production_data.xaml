@@ -1,0 +1,49 @@
+!!!xml1.0
+
+~openerp
+    ~data noupdate='0'
+
+        // mail message subtypes
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_draft
+            @name: production.order.create
+            @res_model: fnx.pd.order
+            @default eval='True'
+            @sequence eval='1'
+            @description: Production order scheduled.
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_sequenced
+            @name: production.order.sequenced
+            @res_model: fnx.pd.order
+            @default eval='False'
+            @sequence eval='11'
+            @description: Production order sequenced.
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_running
+            @name: production.order.running
+            @res_model: fnx.pd.order
+            @default eval='False'
+            @sequence eval='31'
+            @description: Production started.
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_stopped
+            @name: production.order.stopped
+            @res_model: fnx.pd.order
+            @default eval='False'
+            @sequence eval='21'
+            @description: Production paused.
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_complete
+            @name: production.order.complete
+            @res_model: fnx.pd.order
+            @default eval='True'
+            @sequence eval='41'
+            @description: Order is complete.
+
+        ~record model='mail.message.subtype' #mt_fnx_pd_cancelled
+            @name: production.order.cancelled
+            @res_model: fnx.pd.order
+            @default eval='True'
+            @sequence eval='41'
+            @description: Order cancelled.
+

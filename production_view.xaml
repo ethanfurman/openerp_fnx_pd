@@ -4,7 +4,9 @@
     ~data
 
         // Top menu item
-        ~menuitem @FnxPd #menu_fnx_pd_root groups='group_fnx_pd_manager,group_fnx_pd_user,group_fnx_pd_guest'
+        ~menuitem @FnxPd #menu_fnx_pd_root groups='group_fnx_pd_guest'
+
+        ~menuitem $Orders #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10'
 
         ~record model='ir.ui.view' #fnx_pd_order_tree
             @name: fnx_pd_order_tree
@@ -15,7 +17,6 @@
                     @order_no
                     @line_id
                     @item_id
-                    @qty
                     @state
                 
         ~record model='ir.ui.view' #fnx_pd_order_form
@@ -23,53 +24,49 @@
             @model: fnx.pd.order
             @priority eval='10'
             @arch type='xml'
-                ~form string='Production Orders' version='7.0' create='false'
+                ~form $Production_Orders version='7.0' create='false'
                     ~header
-                        @state widget='statusbar' statusbar_visible='draft,scheduled,ready,complete' 
+                        @state widget='statusbar'
                     ~sheet
+                        ~div .oe_right .oe_button_box @button_box
+                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='draft,ready' type='object' context="{'new_state': 'scheduled'}"
+                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='scheduled' type='object' context="{'new_state': 'ready'}"
                         ~group
                             ~group
                                 ~div
                                     ~h1
-                                        ~label for='order_no' string='Order'
-                                        @order_no attrs="{'readonly':True}" class='oe_inline'
+                                        ~label for='order_no' $Order
+                                        @order_no readonly='True' .oe_inline
                                     ~h2
-                                        ~label for="item_id" string="Item"
-                                        @item_id attrs="{'readonly':True}" class='oe_inline' options="{'create':False, 'create_edit':False}"
+                                        ~label for="item_id" $Item
+                                        @item_id readonly='True' .oe_inline options="{'create':False, 'create_edit':False}"
                         ~group
                             ~group
-                                @confirmed writeonly="groups('fnx_pd.group_fnx_pd_manager')" colspan='2'
-                                ~separator colspan='2'
+                                @schedule_date
+                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager'
+                                @sequence
+                                @confirmed readonly='True' colspan='2'
                             ~group
-                                @completed_date readonly='True'
-                                @completed_qty readonly='True'
+                                @finish_date readonly='True'
                                 @completed_fis_qty readonly='True'
                         ~group
                             ~group
-                                @coating writeonly="groups('fnx_pd.group_fnx_pd_manager')"
-                                @allergens writeonly="groups('fnx_pd.group_fnx_pd_manager')"
+                                @coating
+                                @allergens
                             ~group
-                                @dept writeonly="groups('fnx_pd.group_fnx_pd_manager')"
-                                // @line_id writeonly="groups('fnx_pd.group_fnx_pd_manager')"
-                            ~group
-                                @qty
+                                @dept
+                                @line_id
+                                @line_id_set groups='fnx_pd.group_fnx_pd_manager'
                         ~notebook
-                            ~page string='Production Runs'
-                                @schedule_ids nolabel='1' writeonly="groups('fnx_pd.group_fnx_pd_user')" context="{'default_order_id':active_id}"
-                                    ~tree string='Tree View' toolbar='1' editable='bottom'
-                                        @state readonly='True'
-                                        @line_id attrs="{'readonly':[('state','!=','dormant')]}" options="{'create':False, 'create_edit':False}"
-                                        @schedule_date attrs="{'readonly':[('state','!=','dormant')]}"
-                                        @schedule_seq attrs="{'readonly':[('state','!=','dormant')]}"
-                                        @qty attrs="{'readonly':[('state','!=','dormant')]}"
-                            ~page string="Manager Overrides" visible="groups('fnx_pd.group_fnx_pd_manager')"
-                                ~separator string='Reset state to'
-                                ~button string='Unscheduled' name='pd_draft' type='object' context="{'manager_override':True}"
-                                ~button string='Ready' name='pd_ready' type='object' context="{'manager_override':True}"
-                                ~button string='Running' name='pd_running' type='object' context="{'manager_override':True}"
-                                ~button string='Complete' name='pd_complete' type='object' context="{'manager_override':True}"
-                                ~button string='Cancelled' name='pd_cancel' type='object' context="{'manager_override':True}"
-                    ~div class='oe_chatter'
+                            ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
+                                ~separator $Reset_state_to
+                                ~button $Pending name='pd_state' type='object' context="{'new_state: 'draft'}"
+                                ~button $Ready name='pd_state' type='object' context="{'new_state: 'ready'}"
+                                ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'scheduled'}"
+                                ~button $Running name='pd_state' type='object' context="{'new_state: 'running'}"
+                                ~button $Complete name='pd_state' type='object' context="{'new_state: 'complete'}"
+                                ~button $Cancelled name='pd_state' type='object' context="{'new_state: 'cancelled'}"
+                    ~div .oe_chatter
                         @message_follower_ids widget='mail_followers'
                         @message_ids widget='mail_thread' nolabel='1' 
 
@@ -78,22 +75,23 @@
             @model: fnx.pd.order
             @arch type='xml'
                 ~search string='Search Production Orders'
-                    @state string='Status' 
-                    @item_id string='Product' 
-                    @coating string='Coating' 
-                    @allergens string='Allergens' 
+                    @state $Status
+                    @item_id $Product
+                    @coating $Coating
+                    @allergens $Allergens
                     ~separator
-                    ~filter string='Open' name='type_open' domain="[('state','in',['draft','scheduled','needs_schedule','partial','ready','running'])]"
-                    ~filter string='Closed' name='type_closed' domain="[('state','in',['complete','closed','cancelled'])]"
+                    ~filter $Open @type_open domain="[('state','in',['draft','ready','scheduled','running'])]"
+                    ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
-                    ~filter string='Unscheduled' name='type_draft' domain="[('state','=','draft')]"
-                    ~filter string='Scheduled' name='type_scheduled' domain="[('state','=','scheduled')]"
-                    ~filter string="Ready, Needs Schedule" name='type_need_schedule' domain="[('state','=','needs_schedule')]"
-                    ~filter string="Partially Scheduled" name='type_partial' domain="[('state','=','partial')]"
-                    ~filter string='Ready' name='type_ready' domain="[('state','=','ready')]"
-                    ~filter string="In Progress" name='type_running' domain="[('state','=','running')]"
+                    ~filter $Pending @type_draft domain="[('state','=','draft')]"
+                    ~filter $Ready @type_ready domain="[('state','=','needs_schedule')]"
+                    ~filter $Scheduled @type_scheduled domain="[('state','=','scheduled')]"
+                    ~filter $Running @type_running domain="[('state','=','partial')]"
+                    ~filter $Ready @type_ready domain="[('state','=','ready')]"
+                    ~filter $Complete @type_complete domain="[('state','=','running')]"
+                    ~filter $Cancelled @type_cancelled domain="[('state','=','cancelled')]"
                     ~separator
-                    ~group expand='0' string="Group by..."
+                    ~group expand='0' string='Group by...'
                         ~filter string='Allergens' domain='[]' context="{'group_by': 'allergens'}"
                         ~filter string='Coating' domain='[]' context="{'group_by': 'coating'}"
                         ~filter string='Department' domain='[]' context="{'group_by': 'dept'}"
@@ -108,74 +106,38 @@
             @context eval="{'search_default_type_open':1}"
             @limit eval='200'
 
-        ~menuitem name='Orders' #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10'
+        ~menuitem $Orders #menu_item_fnx_pd_orders_all parent='menu_fnx_pd_orders' sequence='40' action='action_fnx_pd_form_orders'
 
-        ~menuitem name='Orders' #menu_item_fnx_pd_orders_all parent='menu_fnx_pd_orders' sequence='40' action='action_fnx_pd_form_orders'
 
-        ~record model="ir.ui.view" #fnx_pd_schedule_tree
-            @name: fnx_pd_schedule_tree
-            @model: fnx.pd.schedule
-            @priority eval='10'
-            @arch type='xml'
-                ~tree string="Tree View" toolbar='1' create='false' editable='bottom'
-                    ~button string='Start Job' groups='fnx_pd.group_fnx_pd_user' name='pd_run' states='ready' type='object' attrs="{'invisible':[('state','!=','dormant')]}"
-                    ~button string='Finish Job' groups='fnx_pd.group_fnx_pd_user' name='pd_complete' states='running' type='object' attrs="{'invisible':[('state','!=','running')]}"
-                    @state readonly='check_context()'
-                    @order_id readonly='True'
-                    @line_id readonly='check_context()' options="{'create':False, 'create_edit':False}"
-                    @order_id.item_id readonly='True'
-                    @schedule_date readonly='check_context()'
-                    @schedule_seq readonly='check_context()'
-                    @qty readonly='check_context()'
+        // ~record model="ir.actions.act_window" #action_fnx_pd_tree_schedules
+        //     @name: Schedules
+        //     @res_model: fnx.pd.schedule
+        //     @view_type: form
+        //     @view_id ref='fnx_pd_schedule_tree'
+        //     @view_mode: tree
+        //     @domain: [('state','in',['cancelled','closed','complete'])]
+        //     @context: {'readonly':True}
+        //     @search_view_id ref='search_fnx_pd_schedules'
+        //     @limit eval="500"
 
-        ~record model="ir.ui.view" #search_fnx_pd_schedules
-            @name: Production Schedule Search
-            @model: fnx.pd.schedule
-            @arch type='xml'
-                ~search string='Search Production Orders'
-                    @order_id string='Orders' 
-                    @schedule_date string='Dates' 
-                    @line_id string='Production Line'
-                    @order_id.item_id string='Production Item'
-                    @order_status string='Order State'
-                    ~separator
-                    ~filter string='Cancelled' name='type_cancelled' domain="[('order_status','=','cancelled')]"
-                    ~filter string='Produced' name='type_produced' domain="[('order_status','=','complete')]"
-                    ~filter string='Complete' name='type_complete' domain="[('order_status','=','closed')]"
-                    ~separator
-                    ~group expand='0' string='Group by...'
-                        ~filter string='Date' domain='[]' context="{'group_by': 'schedule_date'}"
-                        ~filter string="Production Line" name='group_line' domain='[]' context="{'group_by': 'line_id'}"
+        // ~record model="ir.actions.act_window" #action_fnx_pd_active_tree_schedules
+        //     @name: Schedules
+        //     @res_model: fnx.pd.schedule
+        //     @view_type: form
+        //     @view_id ref='fnx_pd_schedule_tree'
+        //     @view_mode: tree
+        //     @domain: [('state','not in',['cancelled','closed','complete'])]
+        //     @search_view_id ref='search_fnx_pd_schedules'
+        //     @context eval="{'search_default_group_line':1}"
+        //     @limit eval="500"
 
-        ~record model="ir.actions.act_window" #action_fnx_pd_tree_schedules
-            @name: Schedules
-            @res_model: fnx.pd.schedule
-            @view_type: form
-            @view_id ref='fnx_pd_schedule_tree'
-            @view_mode: tree
-            @domain: [('state','in',['cancelled','closed','complete'])]
-            @context: {'readonly':True}
-            @search_view_id ref='search_fnx_pd_schedules'
-            @limit eval="500"
+        // ~menuitem @Schedules #menu_fnx_pd_schedules parent='menu_fnx_pd_root' sequence='10'
 
-        ~record model="ir.actions.act_window" #action_fnx_pd_active_tree_schedules
-            @name: Schedules
-            @res_model: fnx.pd.schedule
-            @view_type: form
-            @view_id ref='fnx_pd_schedule_tree'
-            @view_mode: tree
-            @domain: [('state','not in',['cancelled','closed','complete'])]
-            @search_view_id ref='search_fnx_pd_schedules'
-            @context eval="{'search_default_group_line':1}"
-            @limit eval="500"
+        // ~menuitem @Active_Orders #menu_item_fnx_pd_schedules_active parent='menu_fnx_pd_schedules' sequence='10' action='action_fnx_pd_active_tree_schedules'
 
-        ~menuitem name='Schedules' #menu_fnx_pd_schedules parent='menu_fnx_pd_root' sequence='10'
+        // ~menuitem name='Completed/Cancelled Orders' #menu_item_fnx_pd_schedules_all parent='menu_fnx_pd_schedules' sequence='40' action='action_fnx_pd_tree_schedules'
 
-        ~menuitem name="Active Orders" #menu_item_fnx_pd_schedules_active parent='menu_fnx_pd_schedules' sequence='10' action='action_fnx_pd_active_tree_schedules'
-
-        ~menuitem name="Completed/Cancelled Orders" #menu_item_fnx_pd_schedules_all parent='menu_fnx_pd_schedules' sequence='40' action='action_fnx_pd_tree_schedules'
-
-        ~menuitem name='Resources' #menu_fnx_pd_resources parent='menu_fnx_pd_root' sequence='30'
+        ~menuitem @Resources #menu_fnx_pd_resources parent='menu_fnx_pd_root' sequence='30'
 
         ~record model="ir.ui.view" #fnx_pd_production_line_tree
             @name: Production Lines
@@ -188,22 +150,20 @@
             @name: Production Lines
             @model: fis_integration.production_line
             @arch type='xml'
-                ~form string='Production Lines' version='7.0'
+                ~form $Production_Lines version='7.0'
                     ~h1
                         @desc readonly='True'
                     ~h2
                         ~labels for='xml_id' string='FIS ID'
-                        @xml_id
+                        @xml_id readonly='True'
                     ~notebook
-                        ~page string='Schedule'
-                            @schedule_ids nolabel="1"
-                                ~tree editable='bottom'
-                                    @order_status
-                                    @order_id readonly='True'
-                                    @order_id.item_id readonly='True'
-                                    @schedule_date
-                                    @schedule_seq
-                                    @qty
+                        ~page $Schedule
+                            @order_ids nolabel='1'
+                                ~tree
+                                    @order_no readonly='True'
+                                    @item_id readonly='True'
+                                    @schedule_date readonly='True'
+                                    @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
             @name: Production Lines
