@@ -10,6 +10,7 @@ from VSS.path import Path
 from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
 from openerplib import AttrDict, get_connection, get_records
+from openerp.addons.fnx import SortedDocEnum
 import shutil
 import time
 
@@ -70,7 +71,9 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
     if failed:
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
-module = {
+module = globals()
+
+fis_module = {
     'incoming': 'F163',
     'outgoing': 'F33',
     'carrier':  'F27',
@@ -80,13 +83,14 @@ ProductionState = IntEnum(
     'ProductionState',
     'draft needy partial scheduled ready running complete cancelled',
     )
-globals().update(ProductionState.__members__)
+module.update(ProductionState.__members__)
 
 QAll_C = IndexEnum(
     'QAll_C',
-    zip("HEADER EMAIL DEPT PROD_LINE TYPE ITEM_CODE ITEM_DESC ORDER_NUM CONFIRMED QTY DATE DAY COATING ALLERGENS".split(), range(100)),
+    'HEADER EMAIL DEPT PROD_LINE TYPE ITEM_CODE ITEM_DESC ORDER_NUM CONFIRMED QTY DATE DAY COATING ALLERGENS'.split(),
+    start=0,
     )
-globals().update(QAll_C.__members__)
+module.update(QAll_C.__members__)
 
 class BadFormat(Exception):
     "production order is incomplete"
@@ -98,16 +102,40 @@ class MissingPartner(Exception):
 class FISenum(str, Enum):
     pass
 
-class F328(FISenum):
-    "Sales Order Production Pending codes"
-    company_id = 'An$(1,2)'
-    order_id = 'An$(3,6)'
-    produced = 'Bn$(8,1)'          # Y = produced; N = not produced yet; P = partially produced; X = cancelled
-    confirmed = 'Bn$(13,1)'     # Y = confirmed
-    prod_no = 'Cn$(1,8)'
-    dept_code = 'Cn$(157,2)'
-    prod_line = 'Cn$(159,2)'
-    units_produced = 'Ln'
+class F320(str, Enum):
+    """
+    IFMS - FORMULA MASTER FILE
+    """
+    company_id            = 'An$(1,2)'       # Company Code
+    formula_id            = 'An$(3,10)'      # Formula Code
+    rev_id                = 'An$(15,3)'      # Revision Number
+    desc                  = 'Bn$'            # Description
+    coating               = 'Cn$'            # Project Number (mis-named)
+    dept_id               = 'En$(13,2)'      # Department Code
+    color                 = 'En$(15,20)'     # Color
+    formulated_by         = 'Fn$(1,3)'       # Formulated By
+    formula_type          = 'Fn$(4,1)'       # Formula Type
+    ok_to_use             = 'Fn$(5,1)'       # Ok To Use?
+    bulk_item_id          = 'Fn$(18,6)'      # Bulk Item Code
+    prod_units            = 'Fn$(26,2)'      # Production Units
+    allergens             = 'Fn$(28,8)'      # Alpha Sort Key (mis-named)
+
+class F328(str, Enum):
+    """
+    IFPP0 - SALES ORDER PRODUCTION PENDING - HEADER
+    """
+    company_id              = 'An$(1,2)'        # Company Code
+    order_id                = 'An$(3,6)'        # Order Number
+    produced                = 'Bn$(8,1)'        # Produced (Y/N/P/X)
+    order_confirmed         = 'Bn$(13,1)'       # Order Confirmed?
+    prod_id                 = 'Cn$(1,8)'        # Product Number
+    formula_id              = 'Cn$(19,10)'      # Formula Code
+    formula_rev             = 'Cn$(29,3)'       # Formula Revision
+    dept_id                 = 'Cn$(157,2)'      # Department Code
+    prod_line               = 'Cn$(159,2)'      # Production Line
+    units_produced          = 'Ln'              # Units Produced
+    no_of_lots_produced     = 'Mn'              # No Of Lots Produced
+    qty_on_order            = 'Nn'              # Qty On Order
 
 def archive(src_file, dest=ARCHIVE):
     src_file = Path(src_file)
@@ -138,12 +166,19 @@ def get_order(order):
     execfile(order, g)
     return AttrDict(g['order'])
 
+# production date, production line should not be updated from QALL once they have been changed in OpenERP
 def import_spreadsheet(OE, file_name):
+    fis_f320 = fisData.fisData(320, keymatch='10%s      %s0')
     fis_f328 = fisData.fisData(328, keymatch='10%s000010000')
     errors = []
     imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
     completed_orders = []   # list of orders that are marked completed in FIS
-    line_ids = AttrDict((r.xml_id, r) for r in get_records(OE.conn, 'fis_integration.production_line', fields=['id','xml_id']))
+    line_ids = AttrDict(
+            (r.xml_id, r) for r in get_records(
+                OE.conn,
+                'fis_integration.production_line',
+                fields=['id','xml_id'],
+            ))
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -154,41 +189,44 @@ def import_spreadsheet(OE, file_name):
         for i, row in enumerate(sheet.rows(start_row=1), start=1):
             if row == last_row:
                 continue
-            print('processing row %d, order %s' % (i, row[ORDER_NUM]), verbose=2)
+            order_num = row[ORDER_NUM]
+            print('processing row %d, order %s' % (i, order_num), verbose=2)
             followers = get_records(OE.conn, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
             followers = [rec.id for rec in followers] or False
             item = get_records(OE.conn, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
-                errors.append('<row %3d> order %s: product %s not found' % (i, row[ORDER_NUM], row[ITEM_CODE]))
+                errors.append('<row %3d> order %s: product %s not found' % (i, order_num, row[ITEM_CODE]))
                 print(errors[-1])
                 continue
             try:
-                fis_row = fis_f328[row[ORDER_NUM]]
+                fis_row = fis_f328[order_num]
             except KeyError:
-                print('  cannot find %s in FIS' % row[ORDER_NUM])
+                print('  cannot find %s in FIS' % order_num)
                 continue
+            formula_id_rev = fis_row[F328.formula_id], fis_row[F328.formula_rev]
+            formula = fis_f320[formula_id_rev]
             item = item[0].id
             data = AttrDict()
             data.follower_ids = followers
-            data.dept = fis_row[F328.dept_code].strip()
-            # the value of row[PROD_LINE] should be the textual representation of an integer between '01' and '99'
+            data.dept = fis_row[F328.dept_id]
+            # the value of fis_row[F328.prod_line] should be the textual representation of an integer between '01' and '99'
             try:
                 prod_id = '%02d' % int(fis_row[F328.prod_line])
             except ValueError:
                 # no product line, record the error
-                errors.append('<row %3d> order %s: no product line' % (i, row[ORDER_NUM]))
+                errors.append('<row %3d> order %s: no product line' % (i, order_num))
                 print(errors[-1])
                 continue
             data.line_id = line_ids[prod_id].id
             data.item_id = item
-            data.order_no = row[ORDER_NUM]
-            data.confirmed = row[CONFIRMED] == 'Y'
+            data.order_no = order_num
+            data.confirmed = fis_row[F328.order_confirmed] == 'Y'
             try:
                 data.qty = int(ceil(float(row[QTY])))
             except ValueError:
                 # no quantity, record the error
-                errors.append('<row %3d> order %s: no order quantity' % (i, row[ORDER_NUM]))
+                errors.append('<row %3d> order %s: no order quantity' % (i, order_num))
                 print(errors[-1])
                 continue
             try:
@@ -197,33 +235,33 @@ def import_spreadsheet(OE, file_name):
                 sched_date = ''
             if not sched_date:
                 # no schedule date, record the error
-                errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, row[ORDER_NUM]))
+                errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
                 print(errors[-1])
                 continue
             if Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                print('skipping %s: Saturday schedule' % row[ORDER_NUM])
+                print('skipping %s: Saturday schedule' % order_num)
                 continue
             imported_orders.append(data.order_no)
-            data.date = str(sched_date)
-            data.coating = row[COATING].strip()
-            data.allergens = row[ALLERGENS].strip()
+            data.schedule_date = str(sched_date)
+            data.coating = formula[F320.coating]
+            data.allergens = formula[F320.allergens]
             current_record = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_record:
                 print('  checking for changed fields', verbose=2)
                 del data.follower_ids
                 del data.dept
-                del data.line_id
                 del data.order_no
                 current_record = current_record[0]
                 if (
                         data.qty != current_record.qty or
                         data.coating != current_record.coating or
                         data.allergens != current_record.allergens or
-                        data.confirmed != current_record.confirmed
+                        data.confirmed != current_record.confirmed or
+                        data.line_id != current_record.line_id
                     ):
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
-                        if key == 'date':
+                        if key == 'schedule_date':
                             continue
                         elif key == 'item_id':
                             if data[key] != current_record[key][0]:
@@ -232,13 +270,13 @@ def import_spreadsheet(OE, file_name):
                             print('  %s: %r -> %r' % (key, current_record[key], data[key]))
                     OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
-                print('creating %s' % row[ORDER_NUM])
+                print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data))
     oe_open_orders = get_records(
             OE.conn,
             'fnx.pd.order',
             fields=['id', 'order_no'],
-            domain=['|','&',('order_no','not in',imported_orders),('state','not in',['closed','cancelled']),'&',('state','=','closed'),('qty','=',0)],
+            domain=[('order_no','not in',imported_orders),('state','not in',['complete','cancelled'])],
             )
     print('checking open orders in OE')
     for open_order in oe_open_orders:
@@ -264,7 +302,7 @@ def import_spreadsheet(OE, file_name):
         if state == 'complete':
             values['completed_fis_qty'] = fis_order[F328.units_produced]
         print('updating %s: %s' % (open_order.order_no, values))
-        OE.fnx_pd_order.write([open_order.id], values, context={'dropped':True})
+        OE.fnx_pd_order.write([open_order.id], values)
     return errors
 
 
