@@ -11,4 +11,11 @@
                 @arch type='xml'
                     ~xpath expr="//group[@name='inventory']" position='after'
                         ~group string='Production Orders' groups='fnx_pd.group_fnx_pd_guest'
-                            @prod_order_ids colspan='4' nolabel='1'
+                            @prod_order_ids colspan='4' nolabel='1' readonly='1'
+                                ~tree
+                                    @order_no
+                                    @schedule_date
+                                    @line_id
+                                    @allergens
+                                    @coating
+                                    @state
