@@ -122,7 +122,7 @@ class fnx_pd_order(osv.Model):
             if 'line_id' in vals and final_record.line_id_set:
                 del vals['line_id']
                 final_record.line_id = record.line_id
-            if 'schedule_date' in vals and fineal_record.schedule_date_set:
+            if 'schedule_date' in vals and final_record.schedule_date_set:
                 del vals['schedule_date']
                 final_record.schedule_data = record.schedule_data
             # if 'line_id' in vals or ('state' in vals and vals['state'] in ('complete', 'cancelled')):
