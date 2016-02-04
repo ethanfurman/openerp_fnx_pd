@@ -257,7 +257,7 @@ def import_spreadsheet(OE, file_name):
                         data.coating != current_record.coating or
                         data.allergens != current_record.allergens or
                         data.confirmed != current_record.confirmed or
-                        data.line_id != current_record.line_id
+                        data.line_id != current_record.line_id[0]
                     ):
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
@@ -270,6 +270,8 @@ def import_spreadsheet(OE, file_name):
                             print('  %s: %r -> %r' % (key, current_record[key], data[key]))
                     OE.fnx_pd_order.write(current_record.id, dict(data))
             else:
+                if not data.follower_ids:
+                    del data.follower_ids
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data))
     oe_open_orders = get_records(
