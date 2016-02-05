@@ -3,20 +3,26 @@
 ~openerp
     ~data
 
-        // Top menu item
-        ~menuitem @FnxPd #menu_fnx_pd_root groups='group_fnx_pd_guest'
+        // top menu item
+        ~menuitem @FnxPd #menu_fnx_pd_root groups='group_fnx_pd_operator'
 
-        ~menuitem $Orders #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10'
+        // first menu item
+        ~menuitem @Production #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10' groups='group_fnx_pd_user'
 
+        // main order views
         ~record model='ir.ui.view' #fnx_pd_order_tree
             @name: fnx_pd_order_tree
             @model: fnx.pd.order
             @priority eval='10'
             @arch type='xml'
                 ~tree string='Tree View' toolbar='1' create='false'
+                    @dept invisible='1'
                     @order_no
                     @line_id
                     @item_id
+                    @schedule_date
+                    @allergens
+                    @coating
                     @state
                 
         ~record model='ir.ui.view' #fnx_pd_order_form
@@ -80,21 +86,22 @@
                     @coating $Coating
                     @allergens $Allergens
                     ~separator
-                    ~filter $Open @type_open domain="[('state','in',['draft','ready','scheduled','running'])]"
+                    ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','running','stopped'])]"
+                    ~filter $In_Progress @type_progress domain="[('state','in',['running','stopped'])]"
                     ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
-                    ~filter $Pending @type_draft domain="[('state','=','draft')]"
-                    ~filter $Ready @type_ready domain="[('state','=','needs_schedule')]"
-                    ~filter $Scheduled @type_scheduled domain="[('state','=','scheduled')]"
-                    ~filter $Running @type_running domain="[('state','=','partial')]"
-                    ~filter $Ready @type_ready domain="[('state','=','ready')]"
-                    ~filter $Complete @type_complete domain="[('state','=','running')]"
+                    ~filter $Scheduled @type_draft domain="[('state','=','draft')]"
+                    ~filter $Sequenced @type_scheduled domain="[('state','=','sequenced')]"
+                    ~filter $Running @type_running domain="[('state','=','running')]"
+                    ~filter $Paused @type_ready domain="[('state','=','stopped')]"
+                    ~filter $Complete @type_complete domain="[('state','=','complete')]"
                     ~filter $Cancelled @type_cancelled domain="[('state','=','cancelled')]"
                     ~separator
                     ~group expand='0' string='Group by...'
-                        ~filter string='Allergens' domain='[]' context="{'group_by': 'allergens'}"
-                        ~filter string='Coating' domain='[]' context="{'group_by': 'coating'}"
-                        ~filter string='Department' domain='[]' context="{'group_by': 'dept'}"
+                        // ~filter $Line domain='[]' context="{'group_by': 'line_id', 'order_by': 'schedule_date'}"
+                        ~filter $Allergens domain='[]' context="{'group_by': 'allergens'}"
+                        ~filter $Coating domain='[]' context="{'group_by': 'coating'}"
+                        ~filter $Department domain='[]' context="{'group_by': 'dept'}"
 
         ~record model='ir.actions.act_window' #action_fnx_pd_form_orders
             @name: Orders
@@ -106,9 +113,23 @@
             @context eval="{'search_default_type_open':1}"
             @limit eval='200'
 
-        ~menuitem $Orders #menu_item_fnx_pd_orders_all parent='menu_fnx_pd_orders' sequence='40' action='action_fnx_pd_form_orders'
+        ~menuitem $Orders #menu_item_fnx_pd_orders_all parent='menu_fnx_pd_orders' sequence='10' action='action_fnx_pd_form_orders'
 
 
+        ~record model='ir.ui.view' #fnx_pd_order_operator_tree
+            @name: fnx_pd_order_tree
+            @model: fnx.pd.order
+            @priority eval='20'
+            @arch type='xml'
+                ~tree string='Tree View' create='false'
+                    @order_no
+                    @line_id invisible='1'
+                    @item_id
+                    @schedule_date
+                    @allergens
+                    @coating
+                    @state
+                
         // ~record model="ir.actions.act_window" #action_fnx_pd_tree_schedules
         //     @name: Schedules
         //     @res_model: fnx.pd.schedule
@@ -137,8 +158,6 @@
 
         // ~menuitem name='Completed/Cancelled Orders' #menu_item_fnx_pd_schedules_all parent='menu_fnx_pd_schedules' sequence='40' action='action_fnx_pd_tree_schedules'
 
-        ~menuitem @Resources #menu_fnx_pd_resources parent='menu_fnx_pd_root' sequence='30'
-
         ~record model="ir.ui.view" #fnx_pd_production_line_tree
             @name: Production Lines
             @model: fis_integration.production_line
@@ -160,9 +179,10 @@
                         ~page $Schedule
                             @order_ids nolabel='1'
                                 ~tree
-                                    @order_no readonly='True'
-                                    @item_id readonly='True'
-                                    @schedule_date readonly='True'
+                                    @order_no
+                                    @item_id
+                                    @schedule_date
+                                    @sequence invisible='1'
                                     @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
@@ -173,4 +193,38 @@
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
 
-        ~menuitem name='Production Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_resources' sequence='10' action='action_fnx_pd_production_line'
+        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line'
+
+        ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
+
+        ~record model='ir.ui.view' #fnx_pd_production_line_operator_form
+            @name: Lines
+            @model: fis_integration.production_line
+            @arch type='xml'
+                ~form $Production_Lines version='7.0'
+                    ~h1
+                        @desc readonly='True'
+                    ~notebook
+                        ~page $Jobs
+                            @order_ids nolabel='1'
+                                ~tree
+                                    @order_no
+                                    @item_id
+                                    @state
+
+        ~record model='ir.actions.act_window' #action_fnx_pd_production_operator_line
+            @name: Lines
+            @res_model: fis_integration.production_line
+            @view_type: form
+            @view_id ref='fnx_pd_production_line_tree'
+            @view_mode: tree,form
+            @domain: [('desc','!=','Open')]
+            @context eval="{'fnx.pd.order_domain': [('schedule_date','=','TODAY')]}"
+
+        ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_tree
+            @sequence eval='20'
+            @view_mode: tree
+            @view_id ref='fnx_pd_production_line_tree'
+            @act_window_id ref='action_fnx_pd_production_operator_line'
+
+        ~menuitem name='Lines' #menu_fnx_pd_production_operator_lines parent='menu_fnx_pd_operator' sequence='20' action='action_fnx_pd_production_operator_line'
