@@ -66,10 +66,10 @@
                         ~notebook
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
-                                ~button $Pending name='pd_state' type='object' context="{'new_state: 'draft'}"
-                                ~button $Ready name='pd_state' type='object' context="{'new_state: 'ready'}"
-                                ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'scheduled'}"
+                                ~button $Scheduled name='pd_state' type='object' context="{'new_state: 'draft'}"
+                                ~button $Sequenced name='pd_state' type='object' context="{'new_state: 'sequenced'}"
                                 ~button $Running name='pd_state' type='object' context="{'new_state: 'running'}"
+                                ~button $Stopped name='pd_state' type='object' context="{'new_state: 'stopped'}"
                                 ~button $Complete name='pd_state' type='object' context="{'new_state: 'complete'}"
                                 ~button $Cancelled name='pd_state' type='object' context="{'new_state: 'cancelled'}"
                     ~div .oe_chatter
