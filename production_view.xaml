@@ -32,11 +32,11 @@
             @arch type='xml'
                 ~form $Production_Orders version='7.0' create='false'
                     ~header
-                        @state widget='statusbar'
+                        @state widget='statusbar' statusbar_visible='draft,sequenced,running,complete'
                     ~sheet
                         ~div .oe_right .oe_button_box @button_box
-                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='draft,ready' type='object' context="{'new_state': 'scheduled'}"
-                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='scheduled' type='object' context="{'new_state': 'ready'}"
+                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='draft' type='object' context="{'new_state': 'sequenced'}"
+                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='sequenced' type='object' context="{'new_state': 'draft'}"
                         ~group
                             ~group
                                 ~div
@@ -66,12 +66,12 @@
                         ~notebook
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
-                                ~button $Scheduled name='pd_state' type='object' context="{'new_state: 'draft'}"
-                                ~button $Sequenced name='pd_state' type='object' context="{'new_state: 'sequenced'}"
-                                ~button $Running name='pd_state' type='object' context="{'new_state: 'running'}"
-                                ~button $Stopped name='pd_state' type='object' context="{'new_state: 'stopped'}"
-                                ~button $Complete name='pd_state' type='object' context="{'new_state: 'complete'}"
-                                ~button $Cancelled name='pd_state' type='object' context="{'new_state: 'cancelled'}"
+                                ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'draft'}"
+                                ~button $Sequenced name='pd_state' type='object' context="{'new_state': 'sequenced'}"
+                                ~button $Running name='pd_state' type='object' context="{'new_state': 'running'}"
+                                ~button $Stopped name='pd_state' type='object' context="{'new_state': 'stopped'}"
+                                ~button $Complete name='pd_state' type='object' context="{'new_state': 'complete'}"
+                                ~button $Cancelled name='pd_state' type='object' context="{'new_state': 'cancelled'}"
                     ~div .oe_chatter
                         @message_follower_ids widget='mail_followers'
                         @message_ids widget='mail_thread' nolabel='1' 
@@ -178,11 +178,14 @@
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree
+                                ~tree colors="red:state=='draft' and not confirmed;blue:state=='draft' and confirmed;"
+                                    ~button $Release name='pd_list_release' states='draft' type='object'
+                                    ~button $Recall name='pd_list_recall' states='sequenced' type='object'
                                     @order_no
                                     @item_id
                                     @schedule_date
                                     @sequence invisible='1'
+                                    @confirmed invisible='1'
                                     @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
@@ -193,7 +196,7 @@
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
 
-        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line'
+        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
 
@@ -208,6 +211,8 @@
                         ~page $Jobs
                             @order_ids nolabel='1'
                                 ~tree
+                                    ~button string='Start Job' name='pd_job_start' states='sequenced,stopped' type='object'
+                                    ~button string='Stop Job' name='pd_job_stop' states='running' type='object'
                                     @order_no
                                     @item_id
                                     @state
@@ -219,12 +224,18 @@
             @view_id ref='fnx_pd_production_line_tree'
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
-            @context eval="{'fnx.pd.order_domain': [('schedule_date','=','TODAY')]}"
+            @context eval="{'fnx.pd.order_domain': [('schedule_date','<=','TODAY'), ('state','!=','draft')]}"
 
         ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_tree
             @sequence eval='20'
             @view_mode: tree
             @view_id ref='fnx_pd_production_line_tree'
+            @act_window_id ref='action_fnx_pd_production_operator_line'
+
+        ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_form
+            @sequence eval='21'
+            @view_mode: form
+            @view_id ref='fnx_pd_production_line_operator_form'
             @act_window_id ref='action_fnx_pd_production_operator_line'
 
         ~menuitem name='Lines' #menu_fnx_pd_production_operator_lines parent='menu_fnx_pd_operator' sequence='20' action='action_fnx_pd_production_operator_line'

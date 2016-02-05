@@ -22,12 +22,12 @@ class fnx_pd_order(osv.Model):
 
     _track = {
         'state' : {
-            'sample.mt_fnx_pd_draft': lambda s, c, u, r, ctx: r['state'] == 'draft',
-            'sample.mt_fnx_pd_sequenced': lambda s, c, u, r, ctx: r['state'] == 'sequenced',
-            'sample.mt_fnx_pd_running': lambda s, c, u, r, ctx: r['state'] == 'running',
-            'sample.mt_fnx_pd_stopped': lambda s, c, u, r, ctx: r['state'] == 'stopped',
-            'sample.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
-            'sample.mt_fnx_pd_cancelled': lambda s, c, u, r, ctx: r['state'] == 'cancelled',
+            'fnx_pd.mt_fnx_pd_draft': lambda s, c, u, r, ctx: r['state'] == 'draft',
+            'fnx_pd.mt_fnx_pd_sequenced': lambda s, c, u, r, ctx: r['state'] == 'sequenced',
+            'fnx_pd.mt_fnx_pd_running': lambda s, c, u, r, ctx: r['state'] == 'running',
+            'fnx_pd.mt_fnx_pd_stopped': lambda s, c, u, r, ctx: r['state'] == 'stopped',
+            'fnx_pd.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
+            'fnx_pd.mt_fnx_pd_cancelled': lambda s, c, u, r, ctx: r['state'] == 'cancelled',
             }
         }
 
@@ -91,31 +91,14 @@ class fnx_pd_order(osv.Model):
         follower_ids.extend(res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)]))
         values['message_follower_user_ids'] = follower_ids
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
-        # product_product.write(cr, SUPERUSER_ID, values['item_id'], {'prod_order_ids': [(4, order_id)]}, context=context)
-        # if 'line_id' in values and values['line_id']:
-        #     prod_lines = self.pool.get('fis_integration.production_line')
-        #     prod_lines.write(cr, SUPERUSER_ID, values['line_id'], {'order_ids': [(4, order_id)]}, context=context)
         return order_id
-
-    # def unlink(self, cr, uid, ids, context=None):
-    #     'remove order from production line'
-    #     prod_lines = self.pool.get('fis_integration.production_line')
-    #     product_product = self.pool.get('product.product')
-    #     for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
-    #         # prod_lines.write(cr, SUPERUSER_ID, record.line_id.id, {'order_ids': [(3, record.id)]}, context=context)
-    #         product_product.write(cr, SUPERUSER_ID, record.item_id.id, {'prod_order_ids': [(3, record.id)]}, context=context)
-    #     return super(fnx_pd_order, self).unlink(cr, uid, ids, context=context)
 
     def write(self, cr, uid, ids, values, context=None):
         'if needed: update status, change/remove order to/from producuction line'
-        # if 'item_id' in values:
-        #     raise ERPError('Error', 'Item cannot be changed.  Instead, remove order and create a new one.')
         if isinstance(ids, (int, long)):
             ids = [ids]
         if not ids:
             return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
-        # prod_lines = self.pool.get('fis_integration.production_line')
-        # product_product = self.pool.get('product.product')
         for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
             final_record = Proposed(self, cr, values, record, context)
             vals = values.copy()
@@ -125,12 +108,6 @@ class fnx_pd_order(osv.Model):
             if 'schedule_date' in vals and final_record.schedule_date_set:
                 del vals['schedule_date']
                 final_record.schedule_data = record.schedule_data
-            # if 'line_id' in vals or ('state' in vals and vals['state'] in ('complete', 'cancelled')):
-            #     # remove previous line
-            #     prod_lines.write(cr, SUPERUSER_ID, record.line_id.id, {'order_ids': [(3, record.id)]}, context=context)
-            # if 'line_id' in vals and vals['line_id']:
-            #     # add new line
-            #     prod_lines.write(cr, SUPERUSER_ID, vals['line_id'], {'order_ids': [(4, record.id)]}, context=context)
             if (
                 ('schedule_date' in vals and uid != SUPERUSER_ID) or
                 (not final_record.schedule_date_set and final_record.state not in ['draft', ])
@@ -143,12 +120,19 @@ class fnx_pd_order(osv.Model):
                     vals['line_id_set'] = True
             if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
                 return False
-            # if 'state' in vals and vals['state'] in ('complete', 'cancelled'):
-            #     order is finished, remove from line and item
-            #     if final_order.prod_line:
-            #         prod_lines.write(cr, SUPERUSER_ID, final_record.line_id.id, {'order_ids': [(3, record.id)]}, context=context)
-            #     product_product.write(cr, SUPERUSER_ID, final_record.item_id.id, {'prod_order_ids': [(3, record.id)]}, context=context)
         return True
+
+    def pd_list_recall(self, cr, uid, ids, context=None):
+        return self.write(cr, uid, ids, {'state':'draft'}, context=context)
+
+    def pd_list_release(self, cr, uid, ids, context=None):
+        return self.write(cr, uid, ids, {'state':'sequenced'}, context=context)
+
+    def pd_job_start(self, cr, uid, ids, context=None):
+        return self.write(cr, uid, ids, {'state':'running'}, context=context)
+
+    def pd_job_stop(self, cr, uid, ids, context=None):
+        return self.write(cr, uid, ids, {'state':'stopped'}, context=context)
 
     def pd_state(self, cr, uid, ids, context):
         # fnx_pd_order = self.pool.get('fnx.pd.order')
