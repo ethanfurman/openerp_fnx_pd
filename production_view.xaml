@@ -178,7 +178,7 @@
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree colors="red:state=='draft' and not confirmed;blue:state=='draft' and confirmed;"
+                                ~tree colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state=='cancelled';blue:state=='draft' and not confirmed;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
                                     @order_no
@@ -186,6 +186,8 @@
                                     @schedule_date
                                     @sequence invisible='1'
                                     @confirmed invisible='1'
+                                    @allergens
+                                    @coating
                                     @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
