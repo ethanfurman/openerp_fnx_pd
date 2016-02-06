@@ -164,6 +164,7 @@
             @arch type='xml'
                 ~tree string="Production Lines" create='false'
                     @name
+                    @order_totals
 
         ~record model='ir.ui.view' #fnx_pd_production_line_form
             @name: Production Lines
@@ -173,12 +174,13 @@
                     ~h1
                         @desc readonly='True'
                     ~h2
-                        ~labels for='xml_id' string='FIS ID'
+                        ~label for='xml_id' string='FIS ID'
                         @xml_id readonly='True'
+                        @order_totals
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state=='cancelled';blue:state=='draft' and not confirmed;"
+                                ~tree colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
                                     @order_no

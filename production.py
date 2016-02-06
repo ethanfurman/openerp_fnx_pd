@@ -144,6 +144,33 @@ class production_line(osv.Model):
     _name = 'fis_integration.production_line'
     _inherit = 'fis_integration.production_line'
 
+    def _calc_totals(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        elif isinstance(ids, (int, long)):
+            ids = [ids]
+        for record in self.browse(cr, uid, ids, context=context):
+            total = initial = sequenced = needy = ready = 0
+            for order in (record.order_ids or []):
+                state = order.state
+                pulled = order.confirmed
+                total += 1
+                if state == 'draft' and not pulled:
+                    initial += 1
+                elif state == 'draft' and pulled:
+                    needy += 1
+                elif state == 'sequenced' and not pulled:
+                    sequenced += 1
+                else:
+                    ready += 1
+            total = '<span>%d Orders -- %d, ' % (total, initial)
+            sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
+            needy = '<span style="color: red;">%d</span>, ' % needy
+            ready = '<span style="color: green;">%d</span></span>' % ready
+            res[record.id] = total + sequenced + needy + ready
+        return res
+
     _columns = {
         'order_ids': fields.one2many(
             'fnx.pd.order',
@@ -151,5 +178,10 @@ class production_line(osv.Model):
             'Pending Orders',
             domain=[('state','not in',['complete','cancelled'])],
             order='schedule_date, sequence',
+            ),
+        'order_totals': fields.function(
+            _calc_totals,
+            type='html',
+            string='Totals',
             ),
         }
