@@ -238,37 +238,47 @@ def import_spreadsheet(OE, file_name):
                 errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
                 print(errors[-1])
                 continue
-            if Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                print('skipping %s: Saturday schedule' % order_num)
-                continue
             imported_orders.append(data.order_no)
             data.schedule_date = str(sched_date)
             data.coating = formula[F320.coating]
             data.allergens = formula[F320.allergens]
-            current_record = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
-            if current_record:
+            current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
+            if current_records:
                 print('  checking for changed fields', verbose=2)
                 del data.follower_ids
                 del data.dept
                 del data.order_no
-                current_record = current_record[0]
-                if (
-                        data.qty != current_record.qty or
-                        data.coating != current_record.coating or
-                        data.allergens != current_record.allergens or
-                        data.confirmed != current_record.confirmed or
-                        data.line_id != current_record.line_id[0]
-                    ):
+                current_record = current_records[0]
+                if data.qty == current_record.qty:
+                    del data.qty
+                if data.coating == current_record.coating:
+                    del data.coating
+                if data.allergens == current_record.allergens:
+                    del data.allergens
+                if data.confirmed == current_record.confirmed:
+                    del data.confirmed
+                if data.line_id == current_record.line_id[0]:
+                    del data.line_id
+                if data.item_id == current_record.item_id[0]:
+                    del data.item_id
+                if data.schedule_date == current_record.schedule_date:
+                    del data.schedule_date
+                if data:
+                    if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                        print('deleting %s: Saturday schedule' % order_num)
+                        OE.fnx_pd_order.unlink(current_record.id)
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
-                        if key == 'schedule_date':
-                            continue
-                        elif key == 'item_id':
-                            if data[key] != current_record[key][0]:
-                                print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                        if key == 'item_id':
+                            print('  %s: %r -> %r' % (key, current_record[key], data[key]))
                         elif data[key] != current_record[key]:
                             print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                        else:
+                            print('  oops, forgot to delete key', key)
                     OE.fnx_pd_order.write(current_record.id, dict(data))
+            elif Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                print('skipping %s: Saturday schedule' % order_num)
+                continue
             else:
                 if not data.follower_ids:
                     del data.follower_ids
