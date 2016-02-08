@@ -107,7 +107,7 @@ class fnx_pd_order(osv.Model):
                 final_record.line_id = record.line_id
             if 'schedule_date' in vals and final_record.schedule_date_set:
                 del vals['schedule_date']
-                final_record.schedule_data = record.schedule_data
+                final_record.schedule_date = record.schedule_date
             if (
                 ('schedule_date' in vals and uid != SUPERUSER_ID) or
                 (not final_record.schedule_date_set and final_record.state not in ['draft', ])
