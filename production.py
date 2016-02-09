@@ -80,9 +80,6 @@ class fnx_pd_order(osv.Model):
 
     def create(self, cr, uid, values, context=None):
         'create production order, attach to appropriate production line and item'
-        print '-' * 75
-        print 'fnx_pd_order.create:', values
-        print '-' * 75
         follower_ids = values.pop('follower_ids', [])
         product_product = self.pool.get('product.product')
         res_users = self.pool.get('res.users')
@@ -177,7 +174,7 @@ class production_line(osv.Model):
             'line_id',
             'Pending Orders',
             domain=[('state','not in',['complete','cancelled'])],
-            order='schedule_date, sequence',
+            order='sequence, schedule_date',
             ),
         'order_totals': fields.function(
             _calc_totals,
