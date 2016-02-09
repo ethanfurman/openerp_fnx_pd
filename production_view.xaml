@@ -172,25 +172,21 @@
             @arch type='xml'
                 ~form $Production_Lines version='7.0'
                     ~h1
-                        @desc readonly='True'
-                    ~h2
-                        ~label for='xml_id' string='FIS ID'
-                        @xml_id readonly='True'
-                        @order_totals
+                        @desc readonly='True' .oe_inline
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
+                                ~tree delete='0' editable='top' colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
-                                    @order_no
-                                    @item_id
+                                    @order_no readonly='1'
+                                    @item_id readonly='1'
                                     @schedule_date
-                                    @sequence invisible='1'
+                                    @sequence
                                     @confirmed invisible='1'
-                                    @allergens
-                                    @coating
-                                    @state
+                                    @allergens readonly='1'
+                                    @coating readonly='1'
+                                    @state readonly='1'
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
             @name: Production Lines
@@ -203,6 +199,13 @@
         ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
+
+        ~record model="ir.ui.view" #fnx_pd_production_line_operator_tree
+            @name: Production Lines
+            @model: fis_integration.production_line
+            @arch type='xml'
+                ~tree string="Production Lines" create='false'
+                    @name
 
         ~record model='ir.ui.view' #fnx_pd_production_line_operator_form
             @name: Lines
@@ -219,6 +222,8 @@
                                     ~button string='Stop Job' name='pd_job_stop' states='running' type='object'
                                     @order_no
                                     @item_id
+                                    @allergens
+                                    @coating
                                     @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_operator_line
@@ -233,7 +238,7 @@
         ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_tree
             @sequence eval='20'
             @view_mode: tree
-            @view_id ref='fnx_pd_production_line_tree'
+            @view_id ref='fnx_pd_production_line_operator_tree'
             @act_window_id ref='action_fnx_pd_production_operator_line'
 
         ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_form
