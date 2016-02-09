@@ -148,6 +148,7 @@ class production_line(osv.Model):
         elif isinstance(ids, (int, long)):
             ids = [ids]
         for record in self.browse(cr, uid, ids, context=context):
+            res[record.id] = {}
             total = initial = sequenced = needy = ready = 0
             for order in (record.order_ids or []):
                 state = order.state
@@ -161,11 +162,18 @@ class production_line(osv.Model):
                     sequenced += 1
                 else:
                     ready += 1
-            total = '<span>%d Orders -- %d, ' % (total, initial)
-            sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
-            needy = '<span style="color: red;">%d</span>, ' % needy
-            ready = '<span style="color: green;">%d</span></span>' % ready
-            res[record.id] = total + sequenced + needy + ready
+            if sequenced + ready:
+                res[record.id]['order_run_total'] = '%d Orders' % (sequenced + ready)
+            else:
+                res[record.id]['order_run_total'] = '- 0 -'
+            if total:
+                total = '<span>%d Orders -- %d, ' % (total, initial)
+                sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
+                needy = '<span style="color: red;">%d</span>, ' % needy
+                ready = '<span style="color: green;">%d</span></span>' % ready
+                res[record.id]['order_totals'] = total + sequenced + needy + ready
+            else:
+                res[record.id]['order_totals'] = '<span>- 0 -</span>'
         return res
 
     _columns = {
@@ -180,5 +188,12 @@ class production_line(osv.Model):
             _calc_totals,
             type='html',
             string='Totals',
+            multi='totals',
+            ),
+        'order_run_total': fields.function(
+            _calc_totals,
+            type='char',
+            string='Ready',
+            multi='totals',
             ),
         }
