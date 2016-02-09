@@ -196,6 +196,18 @@
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
 
+        ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_line
+            @sequence eval='20'
+            @view_mode: tree
+            @view_id ref='fnx_pd_production_line_tree'
+            @act_window_id ref='action_fnx_pd_production_line'
+
+        ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_form
+            @sequence eval='21'
+            @view_mode: form
+            @view_id ref='fnx_pd_production_line_form'
+            @act_window_id ref='action_fnx_pd_production_line'
+
         ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
