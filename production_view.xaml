@@ -176,12 +176,13 @@
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree create='0' delete='0' editable='top' colors="red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
+                                ~tree create='0' delete='0' editable='top' colors="lightblue:sequence==0;red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
                                     @order_no readonly='1'
                                     @item_id readonly='1'
                                     @schedule_date
+                                    @sequence invisible='1'
                                     @confirmed invisible='1'
                                     @allergens readonly='1'
                                     @coating readonly='1'

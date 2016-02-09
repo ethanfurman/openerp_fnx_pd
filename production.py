@@ -63,7 +63,8 @@ class fnx_pd_order(osv.Model):
         ]
 
     _defaults = {
-        'state': lambda *a: 'draft',
+        'state': 'draft',
+        'sequence': 0,
         }
 
     def _generate_order_by(self, order_spec, query):

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-from bisect import bisect
 from math import ceil
 from scription import *
 from syslog import syslog
@@ -181,17 +180,6 @@ def import_spreadsheet(OE, file_name):
                 fields=['id','xml_id'],
             ))
     # get current orders and construct a dict of (schedule_date, min(sequence))
-    date_seq = {}
-    all_orders = get_records(OE.conn, 'fnx.pd.order', fields=['schedule_date', 'sequence'])
-    for order in all_orders:
-        if order.schedule_date not in date_seq:
-            date_seq[order.schedule_date] = order.sequence
-        else:
-            print('date_seq -> %r,  order.sequence -> %r' % (date_seq[order.schedule_date], order.sequence), verbose=0)
-            if order.sequence < date_seq[order.schedule_date]:
-                print('order.sequence is smaller', verbose=0)
-                date_seq[order.schedule_date] = order.sequence
-    print(date_seq, verbose=0)
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -295,12 +283,6 @@ def import_spreadsheet(OE, file_name):
             else:
                 if not data.follower_ids:
                     del data.follower_ids
-                # figure out sequence
-                data.sequence = date_seq.get(data.schedule_date)
-                if data.sequence is None:
-                    dates = sorted(date_seq.keys())
-                    match = bisect(dates, data.schedule_date)
-                    data.sequence = date_seq[dates[match]]
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data))
     oe_open_orders = get_records(
