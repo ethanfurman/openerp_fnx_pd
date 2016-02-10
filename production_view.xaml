@@ -15,12 +15,14 @@
             @model: fnx.pd.order
             @priority eval='10'
             @arch type='xml'
-                ~tree string='Tree View' toolbar='1' create='false'
+                ~tree string='Tree View' toolbar='1' create='false' colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                     @dept invisible='1'
                     @order_no
                     @line_id
                     @item_id
                     @schedule_date
+                    @sequence invisible='1'
+                    @confirmed invisible='1'
                     @allergens
                     @coating
                     @state
@@ -42,15 +44,14 @@
                                 ~div
                                     ~h1
                                         ~label for='order_no' $Order
-                                        @order_no readonly='True' .oe_inline
+                                        @order_no readonly='True'
                                     ~h2
                                         ~label for="item_id" $Item
                                         @item_id readonly='True' .oe_inline options="{'create':False, 'create_edit':False}"
                         ~group
                             ~group
                                 @schedule_date
-                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager'
-                                @sequence
+                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Allow_nightly_update
                                 @confirmed readonly='True' colspan='2'
                             ~group
                                 @finish_date readonly='True'
@@ -62,7 +63,7 @@
                             ~group
                                 @dept
                                 @line_id
-                                @line_id_set groups='fnx_pd.group_fnx_pd_manager'
+                                @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Allow_nightly_update
                         ~notebook
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
@@ -115,6 +116,16 @@
 
         ~menuitem $Orders #menu_item_fnx_pd_orders_all parent='menu_fnx_pd_orders' sequence='10' action='action_fnx_pd_form_orders'
 
+        ~record model='ir.actions.act_window' #action_fnx_pd_form_closed_orders
+            @name: Closed/Cancelled Orders
+            @res_model: fnx.pd.order
+            @view_type: form
+            @view_id ref='fnx_pd_order_tree'
+            @view_mode: tree,form
+            @domain: [('state','in',['complete','cancelled'])]
+            @limit eval='200'
+
+        ~menuitem $Closed_Orders #menu_item_fnx_pd_orders_closed parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_form_closed_orders'
 
         ~record model='ir.ui.view' #fnx_pd_order_operator_tree
             @name: fnx_pd_order_tree
@@ -130,34 +141,6 @@
                     @coating
                     @state
                 
-        // ~record model="ir.actions.act_window" #action_fnx_pd_tree_schedules
-        //     @name: Schedules
-        //     @res_model: fnx.pd.schedule
-        //     @view_type: form
-        //     @view_id ref='fnx_pd_schedule_tree'
-        //     @view_mode: tree
-        //     @domain: [('state','in',['cancelled','closed','complete'])]
-        //     @context: {'readonly':True}
-        //     @search_view_id ref='search_fnx_pd_schedules'
-        //     @limit eval="500"
-
-        // ~record model="ir.actions.act_window" #action_fnx_pd_active_tree_schedules
-        //     @name: Schedules
-        //     @res_model: fnx.pd.schedule
-        //     @view_type: form
-        //     @view_id ref='fnx_pd_schedule_tree'
-        //     @view_mode: tree
-        //     @domain: [('state','not in',['cancelled','closed','complete'])]
-        //     @search_view_id ref='search_fnx_pd_schedules'
-        //     @context eval="{'search_default_group_line':1}"
-        //     @limit eval="500"
-
-        // ~menuitem @Schedules #menu_fnx_pd_schedules parent='menu_fnx_pd_root' sequence='10'
-
-        // ~menuitem @Active_Orders #menu_item_fnx_pd_schedules_active parent='menu_fnx_pd_schedules' sequence='10' action='action_fnx_pd_active_tree_schedules'
-
-        // ~menuitem name='Completed/Cancelled Orders' #menu_item_fnx_pd_schedules_all parent='menu_fnx_pd_schedules' sequence='40' action='action_fnx_pd_tree_schedules'
-
         ~record model="ir.ui.view" #fnx_pd_production_line_tree
             @name: Production Lines
             @model: fis_integration.production_line
@@ -172,11 +155,11 @@
             @arch type='xml'
                 ~form $Production_Lines version='7.0'
                     ~h1
-                        @desc readonly='True' .oe_inline
+                        @desc readonly='True'
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree create='0' delete='0' editable='top' colors="lightblue:sequence==0;red:state=='draft' and confirmed;green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];gray:state in ['cancelled','complete'];blue:state=='sequenced' and not confirmed;"
+                                ~tree create='0' delete='0' editable='top' colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
                                     @order_no readonly='1'
@@ -208,7 +191,7 @@
             @view_id ref='fnx_pd_production_line_form'
             @act_window_id ref='action_fnx_pd_production_line'
 
-        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='20' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
+        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='30' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
 
@@ -230,13 +213,16 @@
                     ~notebook
                         ~page $Jobs
                             @order_ids nolabel='1'
-                                ~tree
+                                ~tree colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                                     ~button string='Start Job' name='pd_job_start' states='sequenced,stopped' type='object'
                                     ~button string='Stop Job' name='pd_job_stop' states='running' type='object'
                                     @order_no
                                     @item_id
+                                    @sequence invisible='1'
+                                    @confirmed invisible='1'
                                     @allergens
                                     @coating
+                                    @schedule_date
                                     @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_operator_line

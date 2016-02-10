@@ -150,29 +150,43 @@ class production_line(osv.Model):
             ids = [ids]
         for record in self.browse(cr, uid, ids, context=context):
             res[record.id] = {}
-            total = initial = sequenced = needy = ready = 0
+            total = initial = sequenced = needy = ready = fresh = 0
             for order in (record.order_ids or []):
                 state = order.state
                 pulled = order.confirmed
                 total += 1
-                if state == 'draft' and not pulled:
-                    initial += 1
-                elif state == 'draft' and pulled:
-                    needy += 1
-                elif state == 'sequenced' and not pulled:
-                    sequenced += 1
-                else:
+                if state == ('sequenced' and pulled) or state in ('running','stopped'):
+                    # green (released to floor, supplies pulled  OR  running/stopped)
                     ready += 1
+                elif state == 'draft' and pulled:
+                    # red (needs sequenced and released to floor)
+                    needy += 1
+                elif state == 'sequenced':
+                    # blue (released to floor, supplies not pulled)
+                    sequenced += 1
+                elif order.sequence == 0:
+                    # purple (just created, needs sequencing)
+                    fresh += 1
+                elif state == 'draft' and not pulled:
+                    # black (just hangin' out)
+                    initial += 1
+                else:
+                    _logger.error(
+                            "unable to sort order %s {'state':%r, 'confirmed':%r, 'sequence':%r}",
+                            state, pulled, order.sequence,
+                            )
             if sequenced + ready:
                 res[record.id]['order_run_total'] = '%d Orders' % (sequenced + ready)
             else:
                 res[record.id]['order_run_total'] = '- 0 -'
             if total:
-                total = '<span>%d Orders -- %d, ' % (total, initial)
-                sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
+                total = '<span>%d Orders -- ' % total
                 needy = '<span style="color: red;">%d</span>, ' % needy
+                fresh = '<span style="color: purple;">%d</span>, ' % fresh
+                initial = '<span style="color: black;">%d</span>, ' % initial
+                sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
                 ready = '<span style="color: green;">%d</span></span>' % ready
-                res[record.id]['order_totals'] = total + sequenced + needy + ready
+                res[record.id]['order_totals'] = total + needy + fresh + initial + sequenced + ready
             else:
                 res[record.id]['order_totals'] = '<span>- 0 -</span>'
         return res
