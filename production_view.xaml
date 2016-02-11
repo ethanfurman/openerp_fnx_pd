@@ -159,17 +159,17 @@
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
-                                ~tree create='0' delete='0' editable='top' colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
+                                ~tree create='0' delete='0' colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
-                                    @order_no readonly='1'
-                                    @item_id readonly='1'
+                                    @order_no
+                                    @item_id
                                     @schedule_date
-                                    @sequence invisible='1'
-                                    @confirmed invisible='1'
-                                    @allergens readonly='1'
-                                    @coating readonly='1'
-                                    @state readonly='1'
+                                    @sequence
+                                    @confirmed
+                                    @allergens
+                                    @coating
+                                    @state
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_line
             @name: Production Lines
