@@ -267,7 +267,7 @@ def import_spreadsheet(OE, file_name):
                 if data:
                     if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('deleting %s: Saturday schedule' % order_num)
-                        OE.fnx_pd_order.unlink(current_record.id)
+                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
                         if key == 'item_id':
@@ -276,7 +276,7 @@ def import_spreadsheet(OE, file_name):
                             print('  %s: %r -> %r' % (key, current_record[key], data[key]))
                         else:
                             print('  oops, forgot to delete key', key)
-                    OE.fnx_pd_order.write(current_record.id, dict(data))
+                    OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
             elif Weekday.from_date(sched_date) is Weekday.SATURDAY:
                 print('skipping %s: Saturday schedule' % order_num)
                 continue
@@ -284,7 +284,7 @@ def import_spreadsheet(OE, file_name):
                 if not data.follower_ids:
                     del data.follower_ids
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
-                OE.fnx_pd_order.create(dict(data))
+                OE.fnx_pd_order.create(dict(data), context={'script': True})
     oe_open_orders = get_records(
             OE.conn,
             'fnx.pd.order',
@@ -315,7 +315,7 @@ def import_spreadsheet(OE, file_name):
         if state == 'complete':
             values['completed_fis_qty'] = fis_order[F328.units_produced]
         print('updating %s: %s' % (open_order.order_no, values))
-        OE.fnx_pd_order.write([open_order.id], values)
+        OE.fnx_pd_order.write([open_order.id], values, context={'script': True})
     return errors
 
 
