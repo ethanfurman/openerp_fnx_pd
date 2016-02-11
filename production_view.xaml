@@ -165,8 +165,8 @@
                                     @order_no
                                     @item_id
                                     @schedule_date
-                                    @sequence
-                                    @confirmed
+                                    @sequence invisible='1'
+                                    @confirmed invisible='1'
                                     @allergens
                                     @coating
                                     @state
