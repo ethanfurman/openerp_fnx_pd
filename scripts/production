@@ -220,7 +220,7 @@ def import_spreadsheet(OE, file_name):
                 print(errors[-1])
                 prodline_id = '98'
             if prodline_id not in line_ids:
-                errors.append('<row %3d> line_id %s does not exist (using 98)' % (i, prodline_id))
+                errors.append('<row %3d> order %s: line_id %s does not exist (using 98)' % (i, order_num, prodline_id))
                 print(errors[-1])
                 prodline_id = '98'
             data.line_id = line_ids[prodline_id].id
