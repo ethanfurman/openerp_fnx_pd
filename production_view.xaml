@@ -20,6 +20,7 @@
                     @order_no
                     @line_id
                     @item_id
+                    @ordered_qty
                     @schedule_date
                     @sequence invisible='1'
                     @confirmed invisible='1'
@@ -54,8 +55,9 @@
                                 @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Disallow_nightly_update
                                 @confirmed readonly='True' colspan='2'
                             ~group
-                                @finish_date readonly='True'
+                                @ordered_qty
                                 @completed_fis_qty readonly='True'
+                                @finish_date readonly='True'
                         ~group
                             ~group
                                 @coating
@@ -64,6 +66,8 @@
                                 @dept
                                 @line_id
                                 @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Disallow_nightly_update
+                            ~group
+                                @cumulative_time widget='float_time'
                         ~notebook
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
@@ -99,7 +103,7 @@
                     ~filter $Cancelled @type_cancelled domain="[('state','=','cancelled')]"
                     ~separator
                     ~group expand='0' string='Group by...'
-                        // ~filter $Line domain='[]' context="{'group_by': 'line_id', 'order_by': 'schedule_date'}"
+                        ~filter $Line domain='[]' context="{'group_by': 'line_id'}"
                         ~filter $Allergens domain='[]' context="{'group_by': 'allergens'}"
                         ~filter $Coating domain='[]' context="{'group_by': 'coating'}"
                         ~filter $Department domain='[]' context="{'group_by': 'dept'}"
@@ -136,6 +140,7 @@
                     @order_no
                     @line_id invisible='1'
                     @item_id
+                    @ordered_qty
                     @schedule_date
                     @allergens
                     @coating
@@ -162,8 +167,10 @@
                                 ~tree create='0' delete='0' colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
                                     ~button $Recall name='pd_list_recall' states='sequenced' type='object'
+                                    @display_time
                                     @order_no
                                     @item_id
+                                    @ordered_qty
                                     @schedule_date
                                     @sequence invisible='1'
                                     @confirmed invisible='1'
@@ -207,7 +214,7 @@
             @name: Lines
             @model: fis_integration.production_line
             @arch type='xml'
-                ~form $Production_Lines version='7.0' create='0' delete='0' edit='0'
+                ~form $Production_Lines version='7.0' create='0' delete='0'
                     ~h1
                         @desc readonly='True'
                     ~notebook
@@ -216,8 +223,10 @@
                                 ~tree colors="green:(state=='sequenced' and confirmed) or state in ['running','stopped','complete'];red:state=='draft' and confirmed;blue:state=='sequenced';gray:state in ['cancelled','complete'];purple:sequence==0;"
                                     ~button string='Start Job' name='pd_job_start' states='sequenced,stopped' type='object'
                                     ~button string='Stop Job' name='pd_job_stop' states='running' type='object'
+                                    @display_time
                                     @order_no
                                     @item_id
+                                    @ordered_qty
                                     @sequence invisible='1'
                                     @confirmed invisible='1'
                                     @allergens

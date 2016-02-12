@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from datetime import date, time, datetime
 from itertools import groupby
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.osv.osv import except_osv as ERPError
-from openerp.tools import float_compare, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
+from openerp.tools import float_compare, DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
 from openerp.tools.translate import _
 from fnx import Date, DateTime, Time, float, all_equal
 from fnx.oe import Proposed
@@ -31,6 +32,32 @@ class fnx_pd_order(osv.Model):
             }
         }
 
+    def _calc_display_time(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        elif isinstance(ids, (int, long)):
+            ids = [ids]
+        for record in self.read(cr, uid, ids, fields=['last_start_time', 'last_finish_time'], context=context):
+            rec_id = record['id']
+            last_start_time = record['last_start_time']
+            last_finish_time = record['last_finish_time']
+            res[rec_id] = False
+            if last_start_time:
+                text = fields.datetime.context_timestamp(
+                            cr, uid,
+                            datetime.strptime(last_start_time, DEFAULT_SERVER_DATETIME_FORMAT),
+                            context=context,
+                            ).strftime(DEFAULT_SERVER_TIME_FORMAT)
+                if last_finish_time:
+                    text += '\n%s' % (fields.datetime.context_timestamp(
+                                cr, uid,
+                                datetime.strptime(last_finish_time, DEFAULT_SERVER_DATETIME_FORMAT),
+                                context=context,
+                                ).strftime(DEFAULT_SERVER_TIME_FORMAT))
+                res[rec_id] = text
+        return res
+
     _columns = {
         'state': fields.selection([
             ('draft', 'Scheduled'),
@@ -43,7 +70,8 @@ class fnx_pd_order(osv.Model):
             string='Status'),
         'order_no': fields.char('Order #', size=12, required=True, track_visibility='onchange'),
         'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange'),
-        'qty': fields.integer('Quantity', track_visibility='onchange'),
+        'ordered_qty': fields.float('Requested Qty'),
+        'completed_qty': fields.float('Completed Qty', track_visibility='onchange', oldname='qty'),
         'coating': fields.char('Coating', size=10, track_visibility='onchange'),
         'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
         'dept': fields.char('Department', size=10, track_visibility='onchange'),
@@ -55,7 +83,11 @@ class fnx_pd_order(osv.Model):
         'sequence': fields.integer('Order of Production'),
         'start_date': fields.datetime('Production Started', oldname='started', track_visibility='onchange'),
         'finish_date': fields.datetime('Production Finished', oldname='completed', track_visibility='onchange'),
+        'last_start_time': fields.datetime('Most recent start date-time'),
+        'last_finish_time': fields.datetime('Most recent finish date-time'),
         'completed_fis_qty': fields.integer('Total produced (FIS)', track_visibility='onchange'),
+        'display_time': fields.function(_calc_display_time, type='text', string='Time'),
+        'cumulative_time': fields.float('Total Time'),
         }
 
     _sql_constraint = [
@@ -65,6 +97,8 @@ class fnx_pd_order(osv.Model):
     _defaults = {
         'state': 'draft',
         'sequence': 0,
+        'display_time': '',
+        'cumulative_time': 0,
         }
 
     def _generate_order_by(self, order_spec, query):
@@ -124,10 +158,27 @@ class fnx_pd_order(osv.Model):
         return self.write(cr, uid, ids, {'state':'sequenced'}, context=context)
 
     def pd_job_start(self, cr, uid, ids, context=None):
-        return self.write(cr, uid, ids, {'state':'running'}, context=context)
+        return self.write(
+                cr, uid, ids,
+                {'state':'running', 'last_start_time':DateTime.now(), 'last_finish_time':False},
+                context=context,
+                )
 
     def pd_job_stop(self, cr, uid, ids, context=None):
-        return self.write(cr, uid, ids, {'state':'stopped'}, context=context)
+        res = self.write(cr, uid, ids, {'state':'stopped', 'last_finish_time':DateTime.now()}, context=context)
+        if not res:
+            return res
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        for record in self.read(cr, uid, ids, fields=['cumulative_time', 'last_start_time', 'last_finish_time'], context=context):
+            rec_id = record['id']
+            cuma = record['cumulative_time']
+            start = DateTime.strptime(record['last_start_time'], DEFAULT_SERVER_DATETIME_FORMAT)
+            finish = DateTime.strptime(record['last_finish_time'], DEFAULT_SERVER_DATETIME_FORMAT)
+            cuma += float(finish - start)
+            if not self.write(cr, uid, rec_id, {'cumulative_time': cuma}, context=context):
+                return False
+        return res
 
     def pd_state(self, cr, uid, ids, context):
         # fnx_pd_order = self.pool.get('fnx.pd.order')

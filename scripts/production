@@ -213,23 +213,26 @@ def import_spreadsheet(OE, file_name):
             data.dept = fis_row[F328.dept_id]
             # the value of fis_row[F328.prod_line] should be the textual representation of an integer between '01' and '99'
             try:
-                prod_id = '%02d' % int(fis_row[F328.prod_line])
+                prodline_id = '%02d' % int(fis_row[F328.prod_line])
             except ValueError:
                 # no product line, record the error
-                errors.append('<row %3d> order %s: no product line' % (i, order_num))
+                errors.append('<row %3d> order %s: no product line (using 98)' % (i, order_num))
                 print(errors[-1])
-                continue
-            data.line_id = line_ids[prod_id].id
+                prodline_id = '98'
+            if prodline_id not in line_ids:
+                errors.append('<row %3d> line_id %s does not exist (using 98)' % (i, prodline_id))
+                print(errors[-1])
+                prodline_id = '98'
+            data.line_id = line_ids[prodline_id].id
             data.item_id = item
             data.order_no = order_num
             data.confirmed = fis_row[F328.order_confirmed] == 'Y'
             try:
-                data.qty = int(ceil(float(row[QTY])))
+                data.ordered_qty = float(row[QTY])
             except ValueError:
                 # no quantity, record the error
                 errors.append('<row %3d> order %s: no order quantity' % (i, order_num))
                 print(errors[-1])
-                continue
             try:
                 sched_date = fix_date(row[DATE], format='ymd')
             except ValueError:
@@ -238,9 +241,8 @@ def import_spreadsheet(OE, file_name):
                 # no schedule date, record the error
                 errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
                 print(errors[-1])
-                continue
             imported_orders.append(data.order_no)
-            data.schedule_date = str(sched_date)
+            data.schedule_date = str(sched_date) or False
             data.coating = formula[F320.coating]
             data.allergens = formula[F320.allergens]
             current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
@@ -250,8 +252,8 @@ def import_spreadsheet(OE, file_name):
                 del data.dept
                 del data.order_no
                 current_record = current_records[0]
-                if data.qty == current_record.qty:
-                    del data.qty
+                if not data.ordered_qty or data.ordered_qty == current_record.ordered_qty:
+                    del data.ordered_qty
                 if data.coating == current_record.coating:
                     del data.coating
                 if data.allergens == current_record.allergens:
