@@ -22,7 +22,7 @@
                     @item_id
                     @ordered_qty
                     @schedule_date
-                    @sequence invisible='1'
+                    @sequence invisible='1' options="{'resequence': false}"
                     @confirmed invisible='1'
                     @allergens
                     @coating
