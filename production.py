@@ -58,6 +58,31 @@ class fnx_pd_order(osv.Model):
                 res[rec_id] = text
         return res
 
+    def _get_color(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        elif isinstance(ids, (int,long)):
+            ids = [ids]
+        for record in self.read(cr, uid, ids, fields=['state', 'confirmed', 'sequence'], context=context):
+            rec_id = record['id']
+            state = record['state']
+            confirmed = record['confirmed']
+            sequence = record['sequence']
+            color = 'black'
+            if (state == 'sequenced' and confirmed) or state in ['running', 'stopped', 'complete']:
+                color = 'green'
+            elif state == 'draft' and confirmed:
+                color = 'red'
+            elif state == 'sequenced':
+                color = 'blue'
+            elif state in ['cancelled']:
+                color = 'gray'
+            elif sequence == 0:
+                color = 'purple'
+            res[rec_id] = color
+        return res
+
     _columns = {
         'state': fields.selection([
             ('draft', 'Scheduled'),
@@ -87,6 +112,19 @@ class fnx_pd_order(osv.Model):
         'completed_fis_qty': fields.integer('Total produced (FIS)', track_visibility='onchange'),
         'display_time': fields.function(_calc_display_time, type='text', string='Time'),
         'cumulative_time': fields.float('Total Time'),
+        'color': fields.function(
+            _get_color,
+            type='char',
+            size=10,
+            string='Color State',
+            store={
+                'fnx.pd.order': (
+                    lambda self, cr, uid, ids, ctx={}: ids,
+                    ['state', 'confirmed', 'sequence'],
+                    10,
+                    ),
+                },
+            ),
         }
 
     _sql_constraint = [
