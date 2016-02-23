@@ -52,8 +52,8 @@
                         ~group
                             ~group
                                 @schedule_date
-                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Disallow_nightly_update
-                                @confirmed readonly='True' colspan='2'
+                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Run_Date
+                                @confirmed readonly='True' $Supplies_Pulled
                             ~group
                                 @ordered_qty
                                 @completed_fis_qty readonly='True'
@@ -65,7 +65,7 @@
                             ~group
                                 @dept
                                 @line_id
-                                @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Disallow_nightly_update
+                                @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line
                             ~group
                                 @cumulative_time widget='float_time'
                         ~notebook

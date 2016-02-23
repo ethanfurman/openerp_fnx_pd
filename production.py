@@ -101,7 +101,11 @@ class fnx_pd_order(osv.Model):
         'dept': fields.char('Department', size=10, track_visibility='onchange'),
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
         'line_id_set': fields.boolean('User Updated', help='if True, nightly script will not update this field'),
-        'confirmed': fields.boolean('Supplies Reserved', track_visibility='onchange'),
+        'confirmed': fields.selection(
+            [('fis', 'FIS'), ('user', 'OpenERP')],
+            string='Supplies Reserved',
+            track_visibility='onchange',
+            ),
         'schedule_date': fields.date('Run Date', track_visibility='onchange'),
         'schedule_date_set': fields.boolean('User Updated', help='if True, nightly script will not update this field'),
         'sequence': fields.integer('Order of Production'),
