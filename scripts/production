@@ -1,18 +1,24 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+from antipathy import Path
+import sys
+sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
+
 from math import ceil
+from openerplib import AttrDict, get_connection, get_records
+from openerp.addons.fnx import SortedDocEnum
 from scription import *
 from syslog import syslog
 from VSS import Date, fix_date
-from VSS.BBxXlate import fisData
+from VSS.BBxXlate.fisData import fisData
 from VSS.path import Path
 from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
 from VSS.xl import open_workbook
-from openerplib import AttrDict, get_connection, get_records
-from openerp.addons.fnx import SortedDocEnum
+from recipe import get_fis_data, get_ingredients, F320, F322
 import shutil
 import time
+
 
 SOURCE = Path('/var/fis/production/')
 ARCHIVE = Path('/var/openerp/archive/production/')
@@ -52,6 +58,10 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
         files = [f for f in get_files() if f.ext == '.xls']
     OE = connect(hostname, db, login, password)
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
+    OE.fnx_pd_formula = OE.conn.get_model('fnx.pd.formula')
+    OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
+    OE.product = OE.conn.get_model('product.product')
+    OE.inventory = AttrDict()
     retry = []
     failed = []
     for group in ((files, failed), ):
@@ -91,6 +101,7 @@ QAll_C = IndexEnum(
     start=0,
     )
 module.update(QAll_C.__members__)
+
 
 class BadFormat(Exception):
     "production order is incomplete"
@@ -168,8 +179,13 @@ def get_order(order):
 
 # production date, production line should not be updated from QALL once they have been changed in OpenERP
 def import_spreadsheet(OE, file_name):
-    fis_f320 = fisData.fisData(320, keymatch='10%s      %s0')
-    fis_f328 = fisData.fisData(328, keymatch='10%s000010000')
+    '''
+    add/update orders from spreadsheet; also add as-yet-unreferenced formulai
+    '''
+    global fis_f320, fis_f328
+    get_fis_data()
+    fis_f320 = fisData(320, keymatch='10%s  %s0')
+    fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
     imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
     completed_orders = []   # list of orders that are marked completed in FIS
@@ -190,6 +206,7 @@ def import_spreadsheet(OE, file_name):
         for i, row in enumerate(sheet.rows(start_row=1), start=1):
             if row == last_row:
                 continue
+            data = AttrDict()
             order_num = row[ORDER_NUM]
             print('processing row %d, order %s' % (i, order_num), verbose=2)
             followers = get_records(OE.conn, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
@@ -205,10 +222,11 @@ def import_spreadsheet(OE, file_name):
             except KeyError:
                 print('  cannot find %s in FIS' % order_num)
                 continue
-            formula_id_rev = fis_row[F328.formula_id], fis_row[F328.formula_rev]
-            formula = fis_f320[formula_id_rev]
+            # pad the formula to 10 chars
+            formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
+            data.formula_id = False
+            update_formula(OE, formula_id_rev, data)
             item = item[0].id
-            data = AttrDict()
             data.follower_ids = followers
             data.dept = fis_row[F328.dept_id]
             # the value of fis_row[F328.prod_line] should be the textual representation of an integer between '01' and '99'
@@ -226,7 +244,7 @@ def import_spreadsheet(OE, file_name):
             data.line_id = line_ids[prodline_id].id
             data.item_id = item
             data.order_no = order_num
-            data.confirmed = fis_row[F328.order_confirmed] == 'Y'
+            data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
             try:
                 data.ordered_qty = float(row[QTY])
             except ValueError:
@@ -243,8 +261,6 @@ def import_spreadsheet(OE, file_name):
                 print(errors[-1])
             imported_orders.append(data.order_no)
             data.schedule_date = str(sched_date) or False
-            data.coating = formula[F320.coating]
-            data.allergens = formula[F320.allergens]
             current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_records:
                 print('  checking for changed fields', verbose=2)
@@ -254,10 +270,6 @@ def import_spreadsheet(OE, file_name):
                 current_record = current_records[0]
                 if not data.ordered_qty or data.ordered_qty == current_record.ordered_qty:
                     del data.ordered_qty
-                if data.coating == current_record.coating:
-                    del data.coating
-                if data.allergens == current_record.allergens:
-                    del data.allergens
                 if data.confirmed == current_record.confirmed:
                     del data.confirmed
                 if data.line_id == current_record.line_id[0]:
@@ -266,6 +278,8 @@ def import_spreadsheet(OE, file_name):
                     del data.item_id
                 if data.schedule_date == current_record.schedule_date:
                     del data.schedule_date
+                if data.formula_id == current_record.formula_id[0] or not data.formula_id:
+                    del data.formula_id
                 if data:
                     if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('deleting %s: Saturday schedule' % order_num)
@@ -320,6 +334,35 @@ def import_spreadsheet(OE, file_name):
         OE.fnx_pd_order.write([open_order.id], values, context={'script': True})
     return errors
 
+def update_formula(OE, id_rev, data):
+    formula = fis_f320[id_rev]
+    found = OE.fnx_pd_formula.search([('formula_code','=',id_rev[0]), ('formula_revision','=',id_rev[1])])
+    if found:
+        data.formula_id = found[0]
+        return
+    # formula doesn't exist yet
+    # create the individual ingredients
+    ingreds = get_ingredients(*id_rev, food_only=True)
+    ingreds_ids = []
+    for item_id, key, ingredient, _ in ingreds:
+        item_xml_id = ingredient[F322.ingr_id_batch_1]
+        qty_needed = ingredient[F322.qty_batch_1]
+        qty_desc = ingredient[F322.desc_batch_1][-8:]
+        item_id = OE.inventory.get(item_xml_id)
+        if item_id is None:
+            item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
+        ingreds_ids.append(OE.fnx_pd_ingredient.create({
+                'item_id':item_id,
+                'qty_needed':qty_needed,
+                'qty_desc':' '.join(qty_desc.split()),
+                }))
+    # add the formula details
+    data.formula_name = formula[F320.desc]
+    data.formula_code = id_rev[0]
+    data.formula_revision = id_rev[1]
+    data.coating = formula[F320.coating]
+    data.allergens = formula[F320.allergens]
+    data.ingredient_ids = [(6, 0, ingreds_ids)]
 
 def update_order(values):
     pass

@@ -38,8 +38,8 @@
                         @state widget='statusbar' statusbar_visible='draft,sequenced,running,complete'
                     ~sheet
                         ~div .oe_right .oe_button_box @button_box
-                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='draft' type='object' context="{'new_state': 'sequenced'}"
-                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_state' states='sequenced' type='object' context="{'new_state': 'draft'}"
+                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='draft' type='object'
+                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='sequenced' type='object'
                         ~group
                             ~group
                                 ~div
@@ -69,6 +69,21 @@
                             ~group
                                 @cumulative_time widget='float_time'
                         ~notebook
+                            ~page $Formulation
+                                ~group
+                                    ~group
+                                        @formula_name
+                                    ~group
+                                        @formula_code .oe_inline
+                                        @formula_revision label='0' .oe_inline
+                                ~label for='ingredient_ids'
+                                @ingredient_ids nolabel='1'
+                                    ~tree create='0' edit='0' delete='0' colors="red:qty_avail<=0;"
+                                        @item_id
+                                        @qty_needed
+                                        @qty_desc $Unit
+                                        @qty_avail $Available
+                                    
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
                                 ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'draft'}"
