@@ -336,6 +336,7 @@ def import_spreadsheet(OE, file_name):
 
 def update_formula(OE, id_rev, data, errors):
     formula = fis_f320[id_rev]
+    target_item = id_rev[0][:6]
     found = OE.fnx_pd_formula.search([('formula_code','=',id_rev[0]), ('formula_revision','=',id_rev[1])])
     if found:
         data.formula_id = found[0]
@@ -345,6 +346,8 @@ def update_formula(OE, id_rev, data, errors):
     ingreds = get_ingredients(*id_rev, food_only=True)
     ingreds_ids = []
     for item_id, key, ingredient, _ in ingreds:
+        if item_id == target_item:
+            continue
         discard = False
         item_xml_id = ingredient[F322.ingr_id_batch_1]
         qty_needed = ingredient[F322.qty_batch_1]
