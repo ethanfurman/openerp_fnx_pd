@@ -225,7 +225,7 @@ def import_spreadsheet(OE, file_name):
             # pad the formula to 10 chars
             formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
             data.formula_id = False
-            update_formula(OE, formula_id_rev, data)
+            update_formula(OE, formula_id_rev, data, errors)
             item = item[0].id
             data.follower_ids = followers
             data.dept = fis_row[F328.dept_id]
@@ -334,7 +334,7 @@ def import_spreadsheet(OE, file_name):
         OE.fnx_pd_order.write([open_order.id], values, context={'script': True})
     return errors
 
-def update_formula(OE, id_rev, data):
+def update_formula(OE, id_rev, data, errors):
     formula = fis_f320[id_rev]
     found = OE.fnx_pd_formula.search([('formula_code','=',id_rev[0]), ('formula_revision','=',id_rev[1])])
     if found:
@@ -345,12 +345,20 @@ def update_formula(OE, id_rev, data):
     ingreds = get_ingredients(*id_rev, food_only=True)
     ingreds_ids = []
     for item_id, key, ingredient, _ in ingreds:
+        discard = False
         item_xml_id = ingredient[F322.ingr_id_batch_1]
         qty_needed = ingredient[F322.qty_batch_1]
         qty_desc = ingredient[F322.desc_batch_1][-8:]
         item_id = OE.inventory.get(item_xml_id)
         if item_id is None:
-            item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
+            try:
+                item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
+            except IndexError:
+                discard = True
+                errors.append('unable to find ingredient %r in formula %s' % (item_xml_id, id_rev))
+                OE.fnx_pd_ingredient.unlink(ingreds_ids)
+                ingreds_ids = []
+                break
         ingreds_ids.append(OE.fnx_pd_ingredient.create({
                 'item_id':item_id,
                 'qty_needed':qty_needed,
@@ -362,7 +370,8 @@ def update_formula(OE, id_rev, data):
     data.formula_revision = id_rev[1]
     data.coating = formula[F320.coating]
     data.allergens = formula[F320.allergens]
-    data.ingredient_ids = [(6, 0, ingreds_ids)]
+    if ingreds_ids:
+        data.ingredient_ids = [(6, 0, ingreds_ids)]
 
 def update_order(values):
     pass
