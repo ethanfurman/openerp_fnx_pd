@@ -4,7 +4,5 @@
 "access_fnx_pd_order_operator","FnxPd Operator","model_fnx_pd_order","group_fnx_pd_operator",1,1,0,0
 "access_fnx_pd_order_user","FnxPd User","model_fnx_pd_order","group_fnx_pd_user",1,1,0,0
 "access_fnx_pd_order_manager","FnxPd Manager","model_fnx_pd_order","group_fnx_pd_manager",1,1,1,1
-"access_fnx_pd_formula_all","User","model_fnx_pd_formula","base.group_user",1,0,0,0
-"access_fnx_pd_formula_manager","FnxPd Manager","model_fnx_pd_formula","group_fnx_pd_manager",1,1,1,1
 "access_fnx_pd_ingredient_all","User","model_fnx_pd_ingredient","base.group_user",1,0,0,0
 "access_fnx_pd_ingredient_manager","FnxPd Manager","model_fnx_pd_ingredient","group_fnx_pd_manager",1,1,1,1

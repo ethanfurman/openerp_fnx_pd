@@ -20,40 +20,29 @@ class fnx_pd_ingredient(osv.Model):
     _rec_name = 'item_id'
 
     _columns = {
-        'formula_id': fields.many2one('fnx.pd.formula', 'Formula', ondelete='cascade'),
+        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
         'item_id': fields.many2one('product.product', 'Ingredent'),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
         'qty_avail': fields.related(
             'item_id',
-            'imm_available',
+            'qty_available',
             type='float',
             string='Qty Avail.',
-            )
+            ),
+        'confirmed': fields.related(
+            'order_id',
+            'confirmed',
+            type='selection',
+            string='Pulled',
+            ),
         }
-
-
-class fnx_pd_formula(osv.Model):
-    _name = 'fnx.pd.formula'
-
-    _columns = {
-        'formula_name': fields.char('Description', size=64),
-        'formula_code': fields.char('Formula', size=10),
-        'formula_revision': fields.char('Revision', size=3),
-        'coating': fields.char('Coating', size=10, track_visibility='onchange'),
-        'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
-        'ingredient_ids': fields.one2many('fnx.pd.ingredient', 'formula_id', 'Ingredents'),
-        }
-    _sql_constraints = [
-            ('formula_unique', 'unique(formula_code, formula_revision)', 'formula code and revision must be unique'),
-            ]
 
 
 class fnx_pd_order(osv.Model):
     _name = 'fnx.pd.order'
     _description = 'production order'
     _inherit = ['mail.thread']
-    _inherits = {'fnx.pd.formula': 'formula_id'}
     _order = 'order_no'
     _rec_name = 'order_no'
     _mail_flat_thread = False
@@ -152,7 +141,10 @@ class fnx_pd_order(osv.Model):
         'cumulative_time': fields.float('Total Time'),
         'dept': fields.char('Department', size=10, track_visibility='onchange'),
         # formula info
-        'formula_id': fields.many2one('fnx.pd.formula', 'Formula', required=True, ondelete='restrict'),
+        'formula_code': fields.char('Formula & Rev', size=64),
+        'coating': fields.char('Coating', size=10, track_visibility='onchange'),
+        'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
+        'ingredient_ids': fields.one2many('fnx.pd.ingredient', 'order_id', 'Ingredents'),
         # status color
         'color': fields.function(
             _get_color,
@@ -236,7 +228,7 @@ class fnx_pd_order(osv.Model):
             if record.confirmed == 'user':
                 vals['confirmed'] = False
                 for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'outgoing_qty': ingredient.item_id.outgoing_qty-ingredient.qty_needed})
+                    res = ingredient.item_id.write({'qty_available': ingredient.item_id.qty_available+ingredient.qty_needed})
                     if not res:
                         return False
         return self.write(cr, uid, ids, vals, context=context)
@@ -247,7 +239,7 @@ class fnx_pd_order(osv.Model):
             if record.confirmed != 'fis':
                 vals['confirmed'] = 'user'
                 for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'outgoing_qty': ingredient.item_id.outgoing_qty+ingredient.qty_needed})
+                    res = ingredient.item_id.write({'qty_available': ingredient.item_id.qty_available-ingredient.qty_needed})
                     if not res:
                         return False
         return self.write(cr, uid, ids, vals, context=context)
