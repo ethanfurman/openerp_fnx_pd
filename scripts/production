@@ -251,9 +251,9 @@ def import_spreadsheet(OE, file_name):
             data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
             data.ordered_qty = fis_row[F328.qty_on_order]
             try:
-                sched_date = fix_date(row[DATE], format='ymd')
+                sched_date = fix_date(row[DATE], format='ymd') or False
             except ValueError:
-                sched_date = ''
+                sched_date = False
             if not sched_date:
                 # no schedule date, record the error
                 errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
@@ -263,8 +263,9 @@ def import_spreadsheet(OE, file_name):
                 data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             else:
                 data.finish_date = False
+            if data.finish_date:
+                data.finish_date = str(data.finish_date)
             imported_orders.append(data.order_no)
-            data.schedule_date = str(sched_date) or False
             current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_records:
                 print('  checking for changed fields', verbose=2)
@@ -281,7 +282,7 @@ def import_spreadsheet(OE, file_name):
                     elif data[k] == current_record[k]:
                         del data[k]
                 if data:
-                    if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                    if sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('deleting %s: Saturday schedule' % order_num)
                         OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
                     print('updating %s' % row[ORDER_NUM])
@@ -291,19 +292,21 @@ def import_spreadsheet(OE, file_name):
                         else:
                             print('  oops, forgot to delete key', key)
                     OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
-            elif Weekday.from_date(sched_date) is Weekday.SATURDAY:
+            elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                 print('skipping %s: Saturday schedule' % order_num)
                 continue
             else:
                 if not data.follower_ids:
                     del data.follower_ids
                 update_formula(OE, formula_id_rev, data, errors)
+                if sched_date:
+                    data.schedule_date = str(sched_date)
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data), context={'script': True})
     oe_open_orders = get_records(
             OE.conn,
             'fnx.pd.order',
-            fields=['id', 'order_no'],
+            fields=['id', 'completed_fis_qty', 'order_no', 'state'],
             domain=[('order_no','not in',imported_orders),('state','not in',['complete','cancelled'])],
             )
     print('checking open orders in OE')
@@ -315,6 +318,12 @@ def import_spreadsheet(OE, file_name):
             status = 'N'
         else:
             status = fis_order[F328.produced]
+            finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
+            if finish_date:
+                data.finish_date = str(finish_date)
+            qty = fis_order[F328.units_produced] or False
+            if qty and qty != open_order.completed_fis_qty:
+                data.completed_fis_qty = fis_order[F328.units_produced]
         if status == 'Y':
             state = 'complete'
         elif status == 'X':
@@ -327,12 +336,6 @@ def import_spreadsheet(OE, file_name):
             state = None
         if state and state != open_order.state:
             data.state = state
-        qty = fis_order[F328.units_produced] or False
-        if qty and qty != open_order.completed_fis_qty:
-            data.completed_fis_qty = fis_order[F328.units_produced]
-        finish_date = fis_order[F328.prod_date] or False
-        if finish_date and finish_date != open_order.finish_date:
-            data.finish_date = finish_date
         if data:
             print('updating %s: %s' % (open_order.order_no, dict(data)))
             OE.fnx_pd_order.write([open_order.id], dict(data), context={'script': True})
@@ -352,6 +355,7 @@ def update_formula(OE, id_rev, data, errors):
         errors.append('unable to find yield qty for %s-%s' % id_rev)
         yield_qty = 0.0
         scale = 0.0
+    discard = False
     for item_id, key, ingredient, _ in ingreds:
         if item_id == target_item:
             continue
