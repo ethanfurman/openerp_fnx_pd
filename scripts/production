@@ -72,7 +72,7 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
                 [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
                 [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
                 managers = get_records(OE.conn, 'res.users', domain=[('id','in',fnxpd_manager_group.users)], fields=['id','login','email'])
-                emails = [mgr.email for mgr in managers if mgr.id != 1]
+                emails = [mgr.email for mgr in managers if mgr.id != 1 and mgr.email]
                 if emails:
                     mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
                     if mail_errors:
