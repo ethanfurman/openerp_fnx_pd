@@ -320,7 +320,10 @@ def import_spreadsheet(OE, file_name, only_order_no):
         try:
             fis_order = fis_f328[open_order.order_no]
         except KeyError:
-            status = 'N'
+            # no longer present, delete
+            print('deleting missing order: %s' % open_order.order_no)
+            OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+            continue
         else:
             status = fis_order[F328.produced]
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
