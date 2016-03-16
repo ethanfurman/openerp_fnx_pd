@@ -218,8 +218,6 @@ def import_spreadsheet(OE, file_name, only_order_no):
             if only_order_no and order_num != only_order_no:
                 continue
             print('processing row %d, order %s' % (i, order_num), verbose=2)
-            followers = get_records(OE.conn, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
-            followers = [rec.id for rec in followers] or False
             item = get_records(OE.conn, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
             if not item:
                 # couldn't find the product, record the error
@@ -235,7 +233,6 @@ def import_spreadsheet(OE, file_name, only_order_no):
             item = item[0].id
             # pad the formula to 10 chars
             formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
-            data.follower_ids = followers
             data.dept = fis_row[F328.dept_id]
             # the value of fis_row[F328.prod_line] should be the textual representation of an integer between '01' and '99'
             try:
@@ -274,7 +271,6 @@ def import_spreadsheet(OE, file_name, only_order_no):
             current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_records:
                 print('  checking for changed fields', verbose=2)
-                del data.follower_ids
                 del data.dept
                 del data.order_no
                 current_record = current_records[0]
@@ -302,8 +298,6 @@ def import_spreadsheet(OE, file_name, only_order_no):
                 print('skipping %s: Saturday schedule' % order_num)
                 continue
             else:
-                if not data.follower_ids:
-                    del data.follower_ids
                 update_formula(OE, formula_id_rev, data, errors)
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data), context={'script': True})
