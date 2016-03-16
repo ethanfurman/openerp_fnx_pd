@@ -251,20 +251,21 @@ def import_spreadsheet(OE, file_name):
             data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
             data.ordered_qty = fis_row[F328.qty_on_order]
             try:
-                sched_date = fix_date(row[DATE], format='ymd') or False
+                sched_date = fix_date(row[DATE], format='ymd')
             except ValueError:
-                sched_date = False
+                sched_date = ''
             if not sched_date:
                 # no schedule date, record the error
                 errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
                 print(errors[-1])
+                data.schedule_date = False
+            else:
+                data.schedule_date = str(sched_date)
             data.completed_fis_qty = fis_row[F328.units_produced] or False
             if data.completed_fis_qty:
-                data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
+                data.finish_date = str(fix_date(fis_row[F328.prod_date], format='mdy')) or False
             else:
                 data.finish_date = False
-            if data.finish_date:
-                data.finish_date = str(data.finish_date)
             imported_orders.append(data.order_no)
             current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
             if current_records:
@@ -299,8 +300,6 @@ def import_spreadsheet(OE, file_name):
                 if not data.follower_ids:
                     del data.follower_ids
                 update_formula(OE, formula_id_rev, data, errors)
-                if sched_date:
-                    data.schedule_date = str(sched_date)
                 print('creating %s' % row[ORDER_NUM], 'with:\n', data)
                 OE.fnx_pd_order.create(dict(data), context={'script': True})
     oe_open_orders = get_records(
@@ -355,7 +354,7 @@ def update_formula(OE, id_rev, data, errors):
         errors.append('unable to find yield qty for %s-%s' % id_rev)
         yield_qty = 0.0
         scale = 0.0
-    discard = False
+    discard = False  # in case ingreds is empty
     for item_id, key, ingredient, _ in ingreds:
         if item_id == target_item:
             continue
