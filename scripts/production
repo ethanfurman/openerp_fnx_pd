@@ -289,6 +289,7 @@ def import_spreadsheet(OE, file_name, order_no):
                     if sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('deleting %s: Saturday schedule' % order_num)
                         OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                        continue
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
                         if data[key] != current_record[key]:
