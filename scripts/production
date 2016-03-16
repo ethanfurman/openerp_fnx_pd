@@ -150,6 +150,7 @@ class F328(str, Enum):
     dept_id                 = 'Cn$(157,2)'      # Department Code
     prod_line               = 'Cn$(159,2)'      # Production Line
     prod_date               = 'Fn$(13,6)'       # Production Date
+    sched_date              = 'Fn$(19,6)'       # Scheduled Date
     units_produced          = 'Ln'              # Units Produced
     no_of_lots_produced     = 'Mn'              # No Of Lots Produced
     qty_on_order            = 'Nn'              # Qty On Order
@@ -311,7 +312,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
     oe_open_orders = get_records(
             OE.conn,
             'fnx.pd.order',
-            fields=['id', 'completed_fis_qty', 'order_no', 'state'],
+            fields=['id', 'completed_fis_qty', 'order_no', 'schedule_date', 'state'],
             domain=[('order_no','not in',imported_orders),('state','not in',['complete','cancelled'])],
             )
     print('checking open orders in OE')
@@ -326,6 +327,10 @@ def import_spreadsheet(OE, file_name, only_order_no):
             continue
         else:
             status = fis_order[F328.produced]
+            if not open_order.schedule_date:
+                sched_date = fix_date(fis_row[F328.sched_date], format='mdy') or False
+                if sched_date:
+                    data.schedule_date = str(sched_date)
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 data.finish_date = str(finish_date)
