@@ -318,6 +318,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
     print('checking open orders in OE')
     for open_order in oe_open_orders:
         data = AttrDict()
+        print('checking open order %s' % open_order.order_no)
         try:
             fis_order = fis_f328[open_order.order_no]
         except KeyError:
@@ -328,9 +329,11 @@ def import_spreadsheet(OE, file_name, only_order_no):
         else:
             status = fis_order[F328.produced]
             if not open_order.schedule_date:
+                print('  schedule date missing')
                 sched_date = fix_date(fis_row[F328.sched_date], format='mdy') or False
                 if sched_date:
                     data.schedule_date = str(sched_date)
+                print('  using %r' % sched_date)
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 data.finish_date = str(finish_date)
