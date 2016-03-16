@@ -43,12 +43,13 @@ def manual_update(hostname='localhost', db=DB, login=USER, password=None, **valu
 
 @Command(
         file_to_process=('order to add/update in system', ),
+        order=('specific order number from file to process', ),
         hostname=('host where OpenERP instance is running', ),
         db=('database to use', ),
         login=('login name to use', ),
         password=('password for login name', ),
         )
-def process(file_to_process='', hostname='localhost', db=DB, login=USER, password=None):
+def process(file_to_process='', order='', hostname='localhost', db=DB, login=USER, password=None):
     "imports a production spreadsheet into FnxPd"
     if password is None:
         password = PW
@@ -67,7 +68,7 @@ def process(file_to_process='', hostname='localhost', db=DB, login=USER, passwor
         time.sleep(5)
         trying, failing = group
         for file in trying:
-            errors = import_spreadsheet(OE, file)
+            errors = import_spreadsheet(OE, file, order or None)
             if errors:
                 [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
                 [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
@@ -183,7 +184,7 @@ def get_order(order):
     return AttrDict(g['order'])
 
 # production date, production line should not be updated from QALL once they have been changed in OpenERP
-def import_spreadsheet(OE, file_name):
+def import_spreadsheet(OE, file_name, order_no):
     '''
     add/update orders from spreadsheet; also add as-yet-unreferenced formulai
     '''
@@ -213,6 +214,8 @@ def import_spreadsheet(OE, file_name):
                 continue
             data = AttrDict()
             order_num = row[ORDER_NUM]
+            if order_no and order_num != order_no:
+                continue
             print('processing row %d, order %s' % (i, order_num), verbose=2)
             followers = get_records(OE.conn, 'res.users', fields=['id'], domain=[('login','=',row[EMAIL])], max_qty=1)
             followers = [rec.id for rec in followers] or False
