@@ -118,7 +118,9 @@ class fnx_pd_order(osv.Model):
             ('complete', 'Complete'),
             ('cancelled', 'Cancelled'),
             ],
-            string='Status'),
+            string='Status',
+            sort_order='definition',
+            ),
         'order_no': fields.char('Order #', size=12, required=True, track_visibility='onchange'),
         'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange'),
         'ordered_qty': fields.float('Requested Qty', track_visibility='onchange', oldname='qty'),
@@ -171,18 +173,6 @@ class fnx_pd_order(osv.Model):
         'display_time': '',
         'cumulative_time': 0,
         }
-
-    def _generate_order_by(self, order_spec, query):
-        "correctly orders state field if state is in query"
-        order_by = super(fnx_pd_order, self)._generate_order_by(order_spec, query)
-        if order_spec and 'state ' in order_spec:
-            state_column = self._columns['state']
-            state_order = 'CASE '
-            for i, state in enumerate(state_column.selection):
-                state_order += "WHEN %s.state='%s' THEN %i " % (self._table, state[0], i)
-            state_order += 'END '
-            order_by = order_by.replace('"%s"."state" ' % self._table, state_order)
-        return order_by
 
     def create(self, cr, uid, values, context=None):
         'create production order, attach to appropriate production line and item'
