@@ -9,7 +9,7 @@
         // first menu item
         ~menuitem @Production #menu_fnx_pd_orders parent='menu_fnx_pd_root' sequence='10' groups='group_fnx_pd_user'
 
-        // main order views
+        // order views
         ~record model='ir.ui.view' #fnx_pd_order_tree
             @name: fnx_pd_order_tree
             @model: fnx.pd.order
@@ -160,6 +160,40 @@
                     @coating
                     @state
                 
+        ~record model='ir.actions.server' #action_fnx_sr_release_to_floor
+           @name: Release to Floor
+           @type: ir.actions.server
+           @model_id ref='model_fnx_pd_order'
+           @state: code
+           @code: self.pd_list_release(cr, uid, context.get('active_ids'), context=context)
+
+        ~record model='ir.values' #value_fnx_sr_release_to_floor
+           @name: Release to Floor
+           @action_id ref='action_fnx_sr_release_to_floor'
+           @value eval="'ir.actions.server,' + str(ref('action_fnx_sr_release_to_floor'))"
+           @key: action
+           @model_id ref='model_fnx_pd_order'
+           @model: fnx.pd.order
+           @key2: client_action_multi
+
+        ~record model='ir.actions.server' #action_fnx_sr_recall_from_floor
+           @name: Recall from Floor
+           @type: ir.actions.server
+           @model_id ref='model_fnx_pd_order'
+           @state: code
+           @code: self.pd_list_recall(cr, uid, context.get('active_ids'), context=context)
+
+        ~record model='ir.values' #value_fnx_sr_recall_from_floor
+           @name: Recall from Floor
+           @action_id ref='action_fnx_sr_recall_from_floor'
+           @value eval="'ir.actions.server,' + str(ref('action_fnx_sr_recall_from_floor'))"
+           @key: action
+           @model_id ref='model_fnx_pd_order'
+           @model: fnx.pd.order
+           @key2: client_action_multi
+
+        // line views
+
         ~record model="ir.ui.view" #fnx_pd_production_line_tree
             @name: Production Lines
             @model: fis_integration.production_line
