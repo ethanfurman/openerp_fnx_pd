@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from datetime import date, time, datetime
-from itertools import groupby
+from datetime import datetime
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
-from openerp.osv.osv import except_osv as ERPError
-from openerp.tools import float_compare, DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, detect_server_timezone
-from openerp.tools.translate import _
-from fnx import Date, DateTime, Time, float, all_equal
+from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT
+from fnx import DateTime, float
 from fnx.oe import Proposed
 import logging
 
@@ -179,9 +176,9 @@ class fnx_pd_order(osv.Model):
         follower_ids = values.pop('follower_ids', [])
         product_product = self.pool.get('product.product')
         res_users = self.pool.get('res.users')
-        item = product_product.browse(cr, uid, values['item_id'])
+        item = product_product.browse(cr, uid, values['item_id'], context=context)
         product_follower_ids = [p.id for p in (item.message_follower_ids or [])]
-        follower_ids.extend(res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)]))
+        follower_ids.extend(res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)]), context=context)
         values['message_follower_user_ids'] = follower_ids
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
         return order_id
