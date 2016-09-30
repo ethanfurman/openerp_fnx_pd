@@ -69,7 +69,7 @@
                             ~group
                                 @cumulative_time widget='float_time'
                         ~notebook
-                            ~page $Formulation
+                            ~page $Formulation groups='fnx_pd.group_fnx_pd_user'
                                 ~group
                                     ~group
                                         @formula_code nolabel='1'
