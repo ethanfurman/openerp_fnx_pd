@@ -178,7 +178,12 @@ class fnx_pd_order(osv.Model):
         res_users = self.pool.get('res.users')
         item = product_product.browse(cr, uid, values['item_id'], context=context)
         product_follower_ids = [p.id for p in (item.message_follower_ids or [])]
-        follower_ids.extend(res_users.search(cr, uid, [('partner_id','in',product_follower_ids),('id','!=',1)]), context=context)
+        follower_ids.extend(
+                res_users.search(
+                    cr, uid,
+                    [('partner_id','in',product_follower_ids),('id','!=',1)],
+                    context=context),
+                )
         values['message_follower_user_ids'] = follower_ids
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
         return order_id
