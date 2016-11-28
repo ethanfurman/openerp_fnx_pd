@@ -68,6 +68,7 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
         time.sleep(5)
         trying, failing = group
         for file in trying:
+            print('using file:', file)
             errors = import_spreadsheet(OE, file, order or None)
             if errors:
                 [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
