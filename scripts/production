@@ -9,6 +9,7 @@ from math import ceil
 from openerplib import AttrDict, get_connection, get_records
 from openerp.addons.fnx import SortedDocEnum
 from scription import *
+from scritpion import echo, error
 from syslog import syslog
 from VSS import Date, fix_date
 from VSS.BBxXlate.fisData import fisData
