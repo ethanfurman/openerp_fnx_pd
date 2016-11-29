@@ -270,6 +270,8 @@ def import_spreadsheet(OE, file_name, only_order_no):
             data.completed_fis_qty = fis_row[F328.units_produced] or False
             if data.completed_fis_qty:
                 data.finish_date = str(fix_date(fis_row[F328.prod_date], format='mdy')) or False
+                if data.finish_date:
+                    data.finish_date += " 00:00:00"
             else:
                 data.finish_date = False
             imported_orders.append(data.order_no)
