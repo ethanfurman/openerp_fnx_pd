@@ -5,6 +5,7 @@ from antipathy import Path
 import sys
 sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
 
+import email
 from math import ceil
 from openerplib import AttrDict, get_connection, get_records
 from openerp.addons.fnx import SortedDocEnum
@@ -83,7 +84,15 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
                 if emails:
                     print('-------', file=stderr)
                     print('sending to: ', ', '.join(emails), file=stderr)
-                    mail_errors = mail('mail.sunridgefarms.com', 25, process_failure_mail % (', '.join(emails), '\n'.join(errors)))
+                    mail_errors = mail(
+                        'mail.sunridgefarms.com',
+                        25,
+                        process_failure_mail % (
+                            ', '.join(emails),
+                            email.utils.formatdate(email.utils.mktime_tz(time.localtime()+(None,))),
+                            '\n'.join(errors),
+                            )
+                        )
                     if mail_errors:
                         print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
                     raise SystemExit("errors during processing, mail attempted")
@@ -413,6 +422,7 @@ def update_order(values):
 process_failure_mail = """\
 To: %s
 From: FnxPD <noreply@sunridgefarms.com>
+Date: %s
 Subject: Failures during processing of QALL spreadsheet
 
 The following errors were detected during nightly processing:
