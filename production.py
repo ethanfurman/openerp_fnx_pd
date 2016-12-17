@@ -4,7 +4,8 @@ from datetime import datetime
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT
-from fnx import DateTime, float
+from dbf import DateTime
+from VSS.utils import float
 from fnx.oe import Proposed
 import logging
 
