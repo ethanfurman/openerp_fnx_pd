@@ -6,20 +6,19 @@ import sys
 sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
 
 import email
-from math import ceil
-from openerplib import AttrDict, get_connection, get_records
-from openerp.addons.fnx import SortedDocEnum
-from scription import *
-from scritpion import echo, error
-from syslog import syslog
-from VSS import Date, fix_date
-from VSS.BBxXlate.fisData import fisData
-from VSS.path import Path
-from VSS.utils import ProgressBar, Enum, IntEnum, AutoEnum, IndexEnum, Weekday
-from VSS.xl import open_workbook
-from recipe import get_fis_data, get_ingredients, F320, F322, F323
 import shutil
 import time
+from math import ceil
+from openerplib import AttrDict, get_connection, get_records
+from syslog import syslog
+from constants import *
+from dbf import Date
+from scription import *
+from VSS.constants import Weekday
+from VSS.BBxXlate.fisData import fisData
+from VSS.utils import ProgressBar, fix_date
+from VSS.xl import open_workbook
+from recipe import get_fis_data, get_ingredients, F320, F322, F323
 
 
 SOURCE = Path('/var/fis/production/')
@@ -27,6 +26,8 @@ ARCHIVE = Path('/var/openerp/archive/production/')
 ERRORS = Path('/var/openerp/archive/production/error')
 USER_PW_DB = Path('/etc/openerp/credentials')
 
+# dummy values to be filled in by USER_PW_DB
+DB = USER = PW = None
 execfile(USER_PW_DB)
 
 
@@ -41,6 +42,7 @@ def manual_update(hostname='localhost', db=DB, login=USER, password=None, **valu
     if password is None:
         password = PW
     OE = connect(hostname, db, login, password)
+    OE
     pass
 
 @Command(
@@ -64,7 +66,6 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
     OE.inventory = AttrDict()
-    retry = []
     failed = []
     for group in ((files, failed), ):
         time.sleep(5)
@@ -75,8 +76,8 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
             if errors:
                 # print to stdout
                 print('-------', file=stderr)
-                for error in errors:
-                    print(error, file=stderr)
+                for err in errors:
+                    print(err, file=stderr)
                 [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
                 [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
                 managers = get_records(OE.conn, 'res.users', domain=[('id','in',fnxpd_manager_group.users)], fields=['id','login','email'])
@@ -98,6 +99,15 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
                     raise SystemExit("errors during processing, mail attempted")
                 else:
                     raise SystemExit("errors during processing")
+            else:
+                mail(
+                    'mail.sunridgefarms.com',
+                    25,
+                    process_failure_mail % (
+                        'ethan@stoneleaf.us',
+                        email.utils.formatdate(email.utils.mktime_tz(time.localtime()+(None,))),
+                        'just testing time stamp',
+                        ))
     if failed:
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
@@ -108,67 +118,6 @@ fis_module = {
     'outgoing': 'F33',
     'carrier':  'F27',
     }
-
-ProductionState = IntEnum(
-    'ProductionState',
-    'draft needy partial scheduled ready running complete cancelled',
-    )
-module.update(ProductionState.__members__)
-
-QAll_C = IndexEnum(
-    'QAll_C',
-    'HEADER EMAIL DEPT PROD_LINE TYPE ITEM_CODE ITEM_DESC ORDER_NUM CONFIRMED QTY DATE DAY COATING ALLERGENS'.split(),
-    start=0,
-    )
-module.update(QAll_C.__members__)
-
-
-class BadFormat(Exception):
-    "production order is incomplete"
-
-class MissingPartner(Exception):
-    "unable to find partner"
-
-# more values to know about
-class FISenum(str, Enum):
-    pass
-
-class F320(str, Enum):
-    """
-    IFMS - FORMULA MASTER FILE
-    """
-    company_id            = 'An$(1,2)'       # Company Code
-    formula_id            = 'An$(3,10)'      # Formula Code
-    rev_id                = 'An$(15,3)'      # Revision Number
-    desc                  = 'Bn$'            # Description
-    coating               = 'Cn$'            # Project Number (mis-named)
-    dept_id               = 'En$(13,2)'      # Department Code
-    color                 = 'En$(15,20)'     # Color
-    formulated_by         = 'Fn$(1,3)'       # Formulated By
-    formula_type          = 'Fn$(4,1)'       # Formula Type
-    ok_to_use             = 'Fn$(5,1)'       # Ok To Use?
-    bulk_item_id          = 'Fn$(18,6)'      # Bulk Item Code
-    prod_units            = 'Fn$(26,2)'      # Production Units
-    allergens             = 'Fn$(28,8)'      # Alpha Sort Key (mis-named)
-
-class F328(str, Enum):
-    """
-    IFPP0 - SALES ORDER PRODUCTION PENDING - HEADER
-    """
-    company_id              = 'An$(1,2)'        # Company Code
-    order_id                = 'An$(3,6)'        # Order Number
-    produced                = 'Bn$(8,1)'        # Produced (Y/N/P/X)
-    order_confirmed         = 'Bn$(13,1)'       # Order Confirmed?
-    prod_id                 = 'Cn$(1,8)'        # Product Number
-    formula_id              = 'Cn$(19,10)'      # Formula Code
-    formula_rev             = 'Cn$(29,3)'       # Formula Revision
-    dept_id                 = 'Cn$(157,2)'      # Department Code
-    prod_line               = 'Cn$(159,2)'      # Production Line
-    prod_date               = 'Fn$(13,6)'       # Production Date
-    sched_date              = 'Fn$(19,6)'       # Scheduled Date
-    units_produced          = 'Ln'              # Units Produced
-    no_of_lots_produced     = 'Mn'              # No Of Lots Produced
-    qty_on_order            = 'Nn'              # Qty On Order
 
 def archive(src_file, dest=ARCHIVE):
     src_file = Path(src_file)
@@ -186,7 +135,7 @@ def archive(src_file, dest=ARCHIVE):
 def connect(hostname, database, user, password):
     OE = AttrDict()
     print('connecting to %s:%s' % (hostname, database))
-    OE.conn = conn = get_connection(hostname=hostname, database=database, login=user, password=password)
+    OE.conn = get_connection(hostname=hostname, database=database, login=user, password=password)
     return OE
 
 def get_files(source=SOURCE):
@@ -210,7 +159,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
     fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
     imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
-    completed_orders = []   # list of orders that are marked completed in FIS
+    # completed_orders = []   # list of orders that are marked completed in FIS
     line_ids = dict(
             (r.xml_id, r) for r in get_records(
                 OE.conn,
@@ -418,16 +367,5 @@ def update_formula(OE, id_rev, data, errors):
 def update_order(values):
     pass
 
-
-process_failure_mail = """\
-To: %s
-From: FnxPD <noreply@sunridgefarms.com>
-Date: %s
-Subject: Failures during processing of QALL spreadsheet
-
-The following errors were detected during nightly processing:
-
-%s
-"""
 
 Main()
