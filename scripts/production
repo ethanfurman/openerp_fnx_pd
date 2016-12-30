@@ -99,15 +99,6 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
                     raise SystemExit("errors during processing, mail attempted")
                 else:
                     raise SystemExit("errors during processing")
-            else:
-                mail(
-                    'mail.sunridgefarms.com',
-                    25,
-                    process_failure_mail % (
-                        'ethan@stoneleaf.us',
-                        email.utils.formatdate(email.utils.mktime_tz(time.localtime()+(None,))),
-                        'just testing time stamp',
-                        ))
     if failed:
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
