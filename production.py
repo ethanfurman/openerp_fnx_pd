@@ -19,7 +19,7 @@ class fnx_pd_ingredient(osv.Model):
 
     _columns = {
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
-        'item_id': fields.many2one('product.product', 'Ingredent'),
+        'item_id': fields.many2one('product.product', 'Ingredient'),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
         'qty_avail': fields.related(
@@ -144,7 +144,7 @@ class fnx_pd_order(osv.Model):
         'formula_code': fields.char('Formula & Rev', size=64),
         'coating': fields.char('Coating', size=10, track_visibility='onchange'),
         'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
-        'ingredient_ids': fields.one2many('fnx.pd.ingredient', 'order_id', 'Ingredents'),
+        'ingredient_ids': fields.one2many('fnx.pd.ingredient', 'order_id', 'Ingredients'),
         # status color
         'color': fields.function(
             _get_color,
