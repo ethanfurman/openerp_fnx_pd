@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# imports
 from __future__ import print_function
 
 from antipathy import Path
@@ -8,15 +9,12 @@ sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
 import email
 import shutil
 import time
-from math import ceil
 from openerplib import AttrDict, get_connection, get_records
-from syslog import syslog
 from constants import *
-from dbf import Date
 from scription import *
 from VSS.constants import Weekday
 from VSS.BBxXlate.fisData import fisData
-from VSS.utils import ProgressBar, fix_date
+from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from recipe import get_fis_data, get_ingredients, F320, F322, F323
 
@@ -27,9 +25,11 @@ ERRORS = Path('/var/openerp/archive/production/error')
 USER_PW_DB = Path('/etc/openerp/credentials')
 
 # dummy values to be filled in by USER_PW_DB
+
 DB = USER = PW = None
 execfile(USER_PW_DB)
 
+# API
 
 @Command(
         values=('settings to use', ),
@@ -78,6 +78,9 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
                 print('-------', file=stderr)
                 for err in errors:
                     print(err, file=stderr)
+                if db.startswith('test'):
+                    # do not send mail from test machines
+                    abort('errors during processing')
                 [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
                 [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
                 managers = get_records(OE.conn, 'res.users', domain=[('id','in',fnxpd_manager_group.users)], fields=['id','login','email'])
@@ -102,7 +105,7 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
     if failed:
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
-module = globals()
+# helpers
 
 fis_module = {
     'incoming': 'F163',
@@ -139,17 +142,18 @@ def get_order(order):
     execfile(order, g)
     return AttrDict(g['order'])
 
-# production date, production line should not be updated from QALL once they have been changed in OpenERP
 def import_spreadsheet(OE, file_name, only_order_no):
     '''
     add/update orders from spreadsheet; also add as-yet-unreferenced formulai
     '''
+    # production date, production line should not be updated from QALL once they have been changed in OpenERP
     global fis_f320, fis_f328
     get_fis_data()
     fis_f320 = fisData(320, keymatch='10%s  %s0')
     fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
-    imported_orders = []    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
+    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
+    imported_orders = []
     # completed_orders = []   # list of orders that are marked completed in FIS
     line_ids = dict(
             (r.xml_id, r) for r in get_records(
