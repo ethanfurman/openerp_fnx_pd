@@ -45,6 +45,7 @@ class F328(FISenum):
     formula_rev             = 'Cn$(29,3)'       # Formula Revision
     dept_id                 = 'Cn$(157,2)'      # Department Code
     prod_line               = 'Cn$(159,2)'      # Production Line
+    prod_sched_date         = 'Fn$(1,6)'        # Production Scheduled Date
     prod_date               = 'Fn$(13,6)'       # Production Date
     sched_date              = 'Fn$(19,6)'       # Scheduled Date
     units_produced          = 'Ln'              # Units Produced
