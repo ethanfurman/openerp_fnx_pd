@@ -223,7 +223,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
                 data.schedule_date = str(sched_date)
             data.completed_fis_qty = fis_row[F328.units_produced] or False
             if data.completed_fis_qty:
-                data.finish_date = str(fix_date(fis_row[F328.prod_date], format='ymd')) or False
+                data.finish_date = str(fix_date(fis_row[F328.prod_date], format='mdy')) or False
                 if data.finish_date:
                     data.finish_date += " 00:00:00"
             else:
@@ -289,7 +289,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
             print('  using %r' % sched_date)
             # if not open_order.schedule_date:
             #     print('  schedule date missing')
-            finish_date = fix_date(fis_row[F328.prod_date], format='ymd') or False
+            finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 data.finish_date = str(finish_date)
             qty = fis_order[F328.units_produced] or False
