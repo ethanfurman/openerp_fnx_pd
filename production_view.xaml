@@ -37,18 +37,15 @@
                     ~header
                         @state widget='statusbar' statusbar_visible='draft,sequenced,running,complete'
                     ~sheet
+                        ~div .oe_left
+                            ~h1
+                                ~label for='order_no' $Order .oe_inline
+                                @order_no readonly='True' $Order .oe_inline
+                            ~h2
+                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
                         ~div .oe_right .oe_button_box @button_box
                             ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='draft' type='object'
                             ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='sequenced' type='object'
-                        ~group
-                            ~group
-                                ~div
-                                    ~h1
-                                        ~label for='order_no' $Order
-                                        @order_no readonly='True'
-                                    ~h2
-                                        ~label for="item_id" $Item
-                                        @item_id readonly='True' .oe_inline options="{'create':False, 'create_edit':False}"
                         ~group
                             ~group
                                 @schedule_date
