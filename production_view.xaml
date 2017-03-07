@@ -96,6 +96,7 @@
             @model: fnx.pd.order
             @arch type='xml'
                 ~search string='Search Production Orders'
+                    @order_no $Order_Number
                     @state $Status
                     @item_id $Product
                     @coating $Coating
