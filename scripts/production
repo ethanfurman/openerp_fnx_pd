@@ -275,14 +275,14 @@ def import_spreadsheet(OE, file_name, only_order_no):
         data = AttrDict()
         print('checking open order %s' % open_order.order_no)
         try:
-            fis_order = fis_f328[open_order.order_no]
+            fis_row = fis_f328[open_order.order_no]
         except KeyError:
             # no longer present, delete
             print('deleting missing order: %s' % open_order.order_no)
             OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
             continue
         else:
-            status = fis_order[F328.produced]
+            status = fis_row[F328.produced]
             sched_date = fix_date(fis_row[F328.prod_sched_date], format='ymd') or False
             if sched_date:
                 data.schedule_date = str(sched_date)
@@ -292,9 +292,9 @@ def import_spreadsheet(OE, file_name, only_order_no):
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 data.finish_date = str(finish_date)
-            qty = fis_order[F328.units_produced] or False
+            qty = fis_row[F328.units_produced] or False
             if qty and qty != open_order.completed_fis_qty:
-                data.completed_fis_qty = fis_order[F328.units_produced]
+                data.completed_fis_qty = fis_row[F328.units_produced]
         if status == 'Y':
             state = 'complete'
         elif status == 'X':
@@ -303,7 +303,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
             state = None
         else:
             # unknown, skip until tomorrow and hope somebody fixes it
-            print('order %s: unknown status %r' % (open_order.order_no, fis_order[F328.produced]))
+            print('order %s: unknown status %r' % (open_order.order_no, fis_row[F328.produced]))
             state = None
         if state and state != open_order.state:
             data.state = state
