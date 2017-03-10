@@ -107,6 +107,17 @@ class fnx_pd_order(osv.Model):
             res[rec_id] = color
         return res
 
+    def _unique_order_no(self, cr, uid, ids, _cache={}):
+        records = self.read(
+                cr, uid,
+                [('order_no','!=', 'CLEAN')],
+                fields=['order_no'],
+                )
+        if len(records) != len(set([r['order_no'] for r in records])):
+            return False
+        else:
+            return True
+
     _columns = {
         'state': fields.selection([
             ('draft', 'Scheduled'),
@@ -161,8 +172,8 @@ class fnx_pd_order(osv.Model):
             ),
         }
 
-    _sql_constraint = [
-        ('order_unique', 'unique(order_no)', 'Order already exists in the system'),
+    _constraints = [
+        (_unique_order_no, 'Order already exists in the system', ['order_no']),
         ]
 
     _defaults = {
@@ -218,6 +229,8 @@ class fnx_pd_order(osv.Model):
     def pd_list_recall(self, cr, uid, ids, context=None):
         vals = {'state': 'draft'}
         for record in self.browse(cr, uid, ids, context=context):
+            if record.order_no == 'CLEAN':
+                continue
             if record.confirmed == 'user':
                 vals['confirmed'] = False
                 for ingredient in record.ingredient_ids:
@@ -229,6 +242,8 @@ class fnx_pd_order(osv.Model):
     def pd_list_release(self, cr, uid, ids, context=None):
         vals = {'state':'sequenced'}
         for record in self.browse(cr, uid, ids, context=context):
+            if record.order_no == 'CLEAN':
+                continue
             if record.confirmed != 'fis':
                 vals['confirmed'] = 'user'
                 for ingredient in record.ingredient_ids:
@@ -339,3 +354,39 @@ class production_line(osv.Model):
             multi='totals',
             ),
         }
+
+class pd_order_clean(osv.TransientModel):
+    _name = 'fnx.pd.order.clean'
+
+    _columns = {
+        'order_no': fields.char('Order #', size=12, required=True, track_visibility='onchange'),
+        'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange'),
+        'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
+        }
+
+    _defaults = {
+        'order_no': 'CLEAN',
+        }
+
+    def create_cleaning(self, cr, uid, ids, context=None):
+        # context contains 'active_id', 'active_ids', and 'active_model'
+        #
+        # we need to create the order in fnx.pd.order, then add that newly
+        # created order to the appropriate line
+        #
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        production_order = self.pool.get('fnx.pd.order')
+        production_line = self.pool.get('fis_integration.production_line')
+        for data in self.read(cr, uid, ids, context=context):
+            item_id = data['item_id'][0]
+            line_id = data['line_id'][0]
+            order_id = production_order.create(
+                    cr, uid,
+                    dict(order_no='CLEAN', item_id=item_id, line_id=line_id, context=context),
+                    )
+            if not production_line.write(cr, uid, [line_id], {'order_ids': [[4, order_id,]]}, context=context):
+                return False
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+

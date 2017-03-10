@@ -192,6 +192,27 @@
 
         // line views
 
+        ~record model='ir.ui.view' #view_fnx_pd_order_clean
+            @name: Add Cleaning
+            @model: fnx.pd.order.clean
+            @arch type='xml'
+                ~form $Add_Cleaning version='7.0'
+                    ~separator $Add_Cleaning colspan='4'
+                    ~group
+                        @item_id domain="[('xml_id','in',['900000', '900001', '900002', '900003', '900004', '900005', '900006', '900007'])]"
+                    ~footer
+                        ~button @create_cleaning $Add type='object'
+
+        ~record model='ir.actions.act_window' #action_fnx_pd_add_cleaning_order
+            @name: Add Cleaning Order
+            @type: ir.actions.act_window
+            @res_model: fnx.pd.order.clean
+            @view_type: form
+            @view_mode: form
+            @view_id ref='view_fnx_pd_order_clean'
+            @target: new
+            @multi: True
+
         ~record model="ir.ui.view" #fnx_pd_production_line_tree
             @name: Production Lines
             @model: fis_integration.production_line
@@ -205,8 +226,11 @@
             @model: fis_integration.production_line
             @arch type='xml'
                 ~form $Production_Lines version='7.0'
-                    ~h1
-                        @desc readonly='True'
+                    ~div .oe_left
+                        ~h1
+                            @desc readonly='True'
+                    ~div .oe_right .oe_button_box @button_box
+                        ~button $Add_Cleaning groups='fnx_pd.group_fnx_pd_user' name='%(fnx_pd.action_fnx_pd_add_cleaning_order)d' type='action' context="{'default_line_id': id}"
                     ~notebook
                         ~page $Schedule
                             @order_ids nolabel='1'
