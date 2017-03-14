@@ -47,3 +47,7 @@
             @sequence eval='41'
             @description: Order cancelled.
 
+        // product categories
+
+        ~record model='product.category' #pd_cleaning
+            @name: Cleaning

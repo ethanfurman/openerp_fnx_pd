@@ -199,7 +199,7 @@
                 ~form $Add_Cleaning version='7.0'
                     ~separator $Add_Cleaning colspan='4'
                     ~group
-                        @item_id domain="[('xml_id','in',['900000', '900001', '900002', '900003', '900004', '900005', '900006', '900007'])]"
+                        @item_id domain="[('categ_id','=',%(fnx_pd.pd_cleaning)d)]"
                     ~footer
                         ~button @create_cleaning $Add type='object'
 
