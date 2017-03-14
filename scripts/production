@@ -14,7 +14,7 @@ from constants import *
 from scription import *
 from VSS.constants import Weekday
 from VSS.BBxXlate.fisData import fisData
-from VSS.utils import fix_date
+from VSS.utils import fix_date, Date
 from VSS.xl import open_workbook
 from recipe import get_fis_data, get_ingredients, F320, F322, F323
 
@@ -161,6 +161,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
                 'fis_integration.production_line',
                 fields=['id','xml_id'],
             ))
+    today = Date.today()
     # get current orders and construct a dict of (schedule_date, min(sequence))
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
@@ -244,10 +245,15 @@ def import_spreadsheet(OE, file_name, only_order_no):
                     elif data[k] == current_record[k]:
                         del data[k]
                 if data:
-                    if sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                        print('deleting %s: Saturday schedule' % order_num)
-                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
-                        continue
+                    if sched_date:
+                        if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                            print('deleting %s: Saturday schedule' % order_num)
+                            OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                            continue
+                        elif (sched_date - today).days > 21:
+                            print('deleting %s: more than three weeks out' % order_num)
+                            OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                            continue
                     print('updating %s' % row[ORDER_NUM])
                     for key in data:
                         if data[key] != current_record[key]:
@@ -287,6 +293,10 @@ def import_spreadsheet(OE, file_name, only_order_no):
             if sched_date:
                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                     print('deleting %s: Saturday schedule' % open_order.order_no)
+                    OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+                    continue
+                elif (sched_date - today).days > 21:
+                    print('deleting %s: more than three weeks out' % open_order.order_no)
                     OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
                     continue
                 data.schedule_date = str(sched_date)
