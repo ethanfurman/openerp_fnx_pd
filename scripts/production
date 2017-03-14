@@ -285,6 +285,10 @@ def import_spreadsheet(OE, file_name, only_order_no):
             status = fis_row[F328.produced]
             sched_date = fix_date(fis_row[F328.prod_sched_date], format='ymd') or False
             if sched_date:
+                if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                    print('deleting %s: Saturday schedule' % open_order.order_no)
+                    OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+                    continue
                 data.schedule_date = str(sched_date)
             print('  using %r' % sched_date)
             # if not open_order.schedule_date:
