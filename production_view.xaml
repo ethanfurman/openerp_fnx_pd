@@ -45,7 +45,7 @@
                                 @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
                         ~div .oe_right .oe_button_box @button_box
                             ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='draft' type='object'
-                            ~button $Recall_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='sequenced' type='object'
+                            ~button $Retract_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='sequenced' type='object'
                         ~group
                             ~group
                                 @schedule_date
@@ -175,14 +175,14 @@
            @key2: client_action_multi
 
         ~record model='ir.actions.server' #action_fnx_sr_recall_from_floor
-           @name: Recall from Floor
+           @name: Retract from Floor
            @type: ir.actions.server
            @model_id ref='model_fnx_pd_order'
            @state: code
            @code: self.pd_list_recall(cr, uid, context.get('active_ids'), context=context)
 
         ~record model='ir.values' #value_fnx_sr_recall_from_floor
-           @name: Recall from Floor
+           @name: Retract from Floor
            @action_id ref='action_fnx_sr_recall_from_floor'
            @value eval="'ir.actions.server,' + str(ref('action_fnx_sr_recall_from_floor'))"
            @key: action
@@ -236,7 +236,7 @@
                             @order_ids nolabel='1'
                                 ~tree create='0' delete='0' colors="green:color=='green';red:color=='red';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
                                     ~button $Release name='pd_list_release' states='draft' type='object'
-                                    ~button $Recall name='pd_list_recall' states='sequenced' type='object'
+                                    ~button $Retract name='pd_list_recall' states='sequenced' type='object'
                                     @color invisible='1'
                                     @display_time
                                     @order_no
