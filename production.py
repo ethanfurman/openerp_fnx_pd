@@ -151,6 +151,7 @@ class fnx_pd_order(osv.Model):
         'display_time': fields.function(_calc_display_time, type='text', string='Time'),
         'cumulative_time': fields.float('Total Time'),
         'dept': fields.char('Department', size=10, track_visibility='onchange'),
+        'special_instructions': fields.text('Special Instructions'),
         # formula info
         'formula_code': fields.char('Formula & Rev', size=64),
         'coating': fields.char('Coating', size=10, track_visibility='onchange'),
