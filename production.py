@@ -120,8 +120,9 @@ class fnx_pd_order(osv.Model):
 
     _columns = {
         'state': fields.selection([
-            ('draft', 'Scheduled'),
-            ('sequenced', 'Sequenced'),
+            ('draft', 'New'),
+            ('sequenced', 'Scheduled'),
+            ('released', 'Released'),
             ('running', 'Running'),
             ('stopped', 'Stopped'),
             ('complete', 'Complete'),
@@ -137,7 +138,7 @@ class fnx_pd_order(osv.Model):
         'line_id_set': fields.boolean('User Updated', help='if True, nightly script will not update this field'),
         'confirmed': fields.selection(
             [('fis', 'FIS'), ('user', 'OpenERP')],
-            string='Supplies Reserved',
+            string='Supplies reserved by',
             track_visibility='onchange',
             ),
         'schedule_date': fields.date('Run Date', track_visibility='onchange'),

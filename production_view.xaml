@@ -35,7 +35,7 @@
             @arch type='xml'
                 ~form $Production_Orders version='7.0' create='false'
                     ~header
-                        @state widget='statusbar' statusbar_visible='draft,sequenced,running,complete'
+                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
                     ~sheet
                         ~div .oe_left
                             ~h1
@@ -50,7 +50,7 @@
                             ~group
                                 @schedule_date
                                 @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Run_Date
-                                @confirmed readonly='True' $Supplies_Pulled
+                                @confirmed readonly='True'
                             ~group
                                 @ordered_qty
                                 @completed_fis_qty readonly='True'
