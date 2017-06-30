@@ -88,24 +88,41 @@ class fnx_pd_order(osv.Model):
             return res
         elif isinstance(ids, (int,long)):
             ids = [ids]
-        for record in self.read(cr, uid, ids, fields=['state', 'confirmed', 'sequence'], context=context):
-            rec_id = record['id']
-            state = record['state']
-            confirmed = record['confirmed']
-            sequence = record['sequence']
+        for record in self.browse(cr, uid, ids, context=context):
+            state = record.state
+            confirmed = record.confirmed
+            sequence = record.sequence
+            for ingredient in record.ingredient_ids:
+                if ingredient.qty_avail < ingredient.qty_needed:
+                    out_of_stock = True
+                    break
+            else:
+                out_of_stock = False
             color = 'black'
-            if (state == 'sequenced' and confirmed) or state in ['running', 'stopped', 'complete']:
+            if out_of_stock and not confirmed:
+                color = 'red'
+            elif (state == 'sequenced' and confirmed) or state in ['running', 'stopped', 'complete']:
                 color = 'green'
             elif state == 'draft' and confirmed:
-                color = 'red'
+                color = 'orange'
             elif state == 'sequenced':
                 color = 'blue'
             elif state in ['cancelled']:
                 color = 'gray'
             elif sequence == 0:
                 color = 'purple'
-            res[rec_id] = color
+            res[record.id] = color
         return res
+
+    def _post_init(self, pool, cr):
+        ids = self.search(cr, 1, [('color','=',False)])
+        res = self._get_color(cr, 1, ids, 'color', None)
+        same_color = {}
+        for id, color in res.items():
+            same_color.setdefault(color, []).append(id)
+        for color, ids in same_color.items():
+            self.write(cr, 1, ids, {'color': color})
+        return True
 
     def _unique_order_no(self, cr, uid, ids, _cache={}):
         records = self.read(
@@ -161,6 +178,7 @@ class fnx_pd_order(osv.Model):
         # status color
         'color': fields.function(
             _get_color,
+            fnct_inv=True,
             type='char',
             size=10,
             string='Color State',
