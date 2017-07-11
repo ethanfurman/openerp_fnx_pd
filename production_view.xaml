@@ -15,7 +15,7 @@
             @model: fnx.pd.order
             @priority eval='10'
             @arch type='xml'
-                ~tree string='Tree View' toolbar='1' create='false' fonts="bold:colors=='orange'" colors="green:color=='green';red:color=='red';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
+                ~tree string='Tree View' toolbar='1' create='false' fonts="bold:colors=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
                     @color invisible='1'
                     @dept invisible='1'
                     @order_no

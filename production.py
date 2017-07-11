@@ -49,6 +49,7 @@ class fnx_pd_order(osv.Model):
         'state' : {
             'fnx_pd.mt_fnx_pd_draft': lambda s, c, u, r, ctx: r['state'] == 'draft',
             'fnx_pd.mt_fnx_pd_sequenced': lambda s, c, u, r, ctx: r['state'] == 'sequenced',
+            'fnx_pd.mt_fnx_pd_released': lambda s, c, u, r, ctx: r['state'] == 'released',
             'fnx_pd.mt_fnx_pd_running': lambda s, c, u, r, ctx: r['state'] == 'running',
             'fnx_pd.mt_fnx_pd_stopped': lambda s, c, u, r, ctx: r['state'] == 'stopped',
             'fnx_pd.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
@@ -101,7 +102,7 @@ class fnx_pd_order(osv.Model):
             color = 'black'
             if out_of_stock and not confirmed:
                 color = 'red'
-            elif (state == 'sequenced' and confirmed) or state in ['running', 'stopped', 'complete']:
+            elif (state == 'released' and confirmed) or state in ['running', 'stopped', 'complete']:
                 color = 'green'
             elif state == 'draft' and confirmed:
                 color = 'orange'
@@ -247,7 +248,7 @@ class fnx_pd_order(osv.Model):
         return True
 
     def pd_list_recall(self, cr, uid, ids, context=None):
-        vals = {'state': 'draft'}
+        vals = {'state': 'sequenced'}
         for record in self.browse(cr, uid, ids, context=context):
             if record.order_no == 'CLEAN':
                 continue
@@ -260,7 +261,7 @@ class fnx_pd_order(osv.Model):
         return self.write(cr, uid, ids, vals, context=context)
 
     def pd_list_release(self, cr, uid, ids, context=None):
-        vals = {'state':'sequenced'}
+        vals = {'state':'released'}
         for record in self.browse(cr, uid, ids, context=context):
             if record.order_no == 'CLEAN':
                 continue
@@ -317,17 +318,17 @@ class production_line(osv.Model):
                 state = order.state
                 pulled = order.confirmed
                 total += 1
-                if state == ('sequenced' and pulled) or state in ('running','stopped'):
+                if state in ('released', 'running','stopped'):
                     # green (released to floor, supplies pulled  OR  running/stopped)
                     ready += 1
                 elif state == 'draft' and pulled:
-                    # red (needs sequenced and released to floor)
+                    # orange (needs scheduling and released to floor)
                     needy += 1
                 elif state == 'sequenced':
-                    # blue (released to floor, supplies not pulled)
+                    # blue (scheduled, supplies not pulled)
                     sequenced += 1
                 elif order.sequence == 0:
-                    # purple (just created, needs sequencing)
+                    # purple (just created, needs scheduling)
                     fresh += 1
                 elif state == 'draft' and not pulled:
                     # black (just hangin' out)
@@ -343,7 +344,7 @@ class production_line(osv.Model):
                 res[record.id]['order_run_total'] = '- 0 -'
             if total:
                 total = '<span>%d Orders -- ' % total
-                needy = '<span style="color: red;">%d</span>, ' % needy
+                needy = '<span style="color: orang;">%d</span>, ' % needy
                 fresh = '<span style="color: purple;">%d</span>, ' % fresh
                 initial = '<span style="color: black;">%d</span>, ' % initial
                 sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
