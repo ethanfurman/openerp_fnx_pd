@@ -274,7 +274,7 @@ def import_spreadsheet(OE, file_name, only_order_no):
             OE.conn,
             'fnx.pd.order',
             fields=['id', 'completed_fis_qty', 'order_no', 'schedule_date', 'state'],
-            domain=[('order_no','not in',imported_orders),('state','not in',['complete','cancelled'])],
+            domain=[('state','not in',['complete','cancelled'])],
             )
     print('OE open orders: ', len(oe_open_orders))
     for open_order in oe_open_orders:
