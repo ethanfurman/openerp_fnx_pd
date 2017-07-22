@@ -19,3 +19,10 @@
                                     @allergens
                                     @coating
                                     @state
+                        ~group string='Ingredient For' groups='fnx_pd.group_fnx_pd_guest'
+                            @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
+                                ~tree
+                                    @order_no
+                                    @qty_needed
+                                    @confirmed
+                                    @order_state

@@ -19,6 +19,24 @@ class fnx_pd_ingredient(osv.Model):
 
     _columns = {
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
+        'order_no': fields.related(
+            'order_id', 'order_no',
+            string='Order #',
+            type='char',
+            ),
+        'order_state': fields.related(
+            'order_id', 'state',
+            string='Order State',
+            type='selection',
+            selection=[
+                ('draft', 'New'),
+                ('sequenced', 'Scheduled'),
+                ('released', 'Released'),
+                ('running', 'Running'),
+                ('stopped', 'Stopped'),
+                ('complete', 'Complete'),
+                ('cancelled', 'Cancelled'),
+                ]),
         'item_id': fields.many2one('product.product', 'Ingredient'),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
@@ -32,7 +50,8 @@ class fnx_pd_ingredient(osv.Model):
             'order_id',
             'confirmed',
             type='selection',
-            string='Pulled',
+            selection=[('fis', 'FIS'), ('user', 'OpenERP')],
+            string='Reserved by',
             ),
         }
 

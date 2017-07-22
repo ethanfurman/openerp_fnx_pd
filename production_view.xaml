@@ -45,7 +45,7 @@
                                 @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
                         ~div .oe_right .oe_button_box @button_box
                             ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='draft' type='object'
-                            ~button $Retract_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='sequenced' type='object'
+                            ~button $Retract_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='released' type='object'
                         ~group
                             ~group
                                 @schedule_date
@@ -72,7 +72,6 @@
                                 ~group
                                     ~group
                                         @formula_code nolabel='1'
-                                ~label for='ingredient_ids'
                                 @ingredient_ids nolabel='1'
                                     ~tree create='0' edit='0' delete='0' colors="red:qty_avail<qty_needed and not confirmed;"
                                         @item_id

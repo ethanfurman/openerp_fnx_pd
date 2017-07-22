@@ -4,7 +4,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 class product_product(osv.Model):
-    'Adds Available column and shipped_as columns'
+    'add link to production orders'
     _name = 'product.product'
     _inherit = 'product.product'
 
@@ -15,6 +15,12 @@ class product_product(osv.Model):
             string='Production Orders',
             domain=[('state','not in',['complete','cancelled'])],
             order='schedule_date, sequence',
+            ),
+        'prod_ingredient_ids': fields.one2many(
+            'fnx.pd.ingredient',
+            'item_id',
+            string='Ingredient for',
+            domain=[('order_state','not in',['complete','cancelled'])],
             ),
         }
 
