@@ -75,7 +75,7 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
         for file in trying:
             print('using file:', file)
             imported_orders, errors = import_spreadsheet(OE, file, order or None, dryrun=dryrun)
-            check_open_orders(OE, ignore=imported_orders, dryrun=dryrun)
+            check_open_orders(OE, dryrun=dryrun)
             if errors:
                 # print to stdout
                 print('-------', file=stderr)
