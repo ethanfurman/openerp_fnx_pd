@@ -46,7 +46,7 @@ class F328(FISenum):
     dept_id                 = 'Cn$(157,2)'      # Department Code
     prod_line               = 'Cn$(159,2)'      # Production Line
     prod_sched_date         = 'Fn$(1,6)'        # Production Scheduled Date
-    prod_date               = 'Fn$(13,6)'       # Production Date
+    prod_date               = 'Fn$(13,6)'       # 41: Production Date
     sched_date              = 'Fn$(19,6)'       # Scheduled Date
     units_produced          = 'Ln'              # Units Produced
     no_of_lots_produced     = 'Mn'              # No Of Lots Produced
