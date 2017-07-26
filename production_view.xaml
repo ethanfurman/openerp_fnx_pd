@@ -27,11 +27,12 @@
                     @allergens
                     @coating
                     @state
-                
+
         ~record model='ir.ui.view' #fnx_pd_order_form
             @name: fnx_pd_order_form
             @model: fnx.pd.order
             @priority eval='10'
+            @groups_id eval="[(4, ref('fnx_pd.group_fnx_pd_user'))]"
             @arch type='xml'
                 ~form $Production_Orders version='7.0' create='false'
                     ~header
@@ -79,7 +80,7 @@
                                         @qty_desc $Unit
                                         @confirmed invisible='1'
                                         @qty_avail $Available attrs="{'invisible': [('confirmed','!=',False)]}"
-                                    
+
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
                                 ~button $New name='pd_state' type='object' context="{'new_state': 'draft'}"
@@ -91,7 +92,7 @@
                                 ~button $Cancelled name='pd_state' type='object' context="{'new_state': 'cancelled'}"
                     ~div .oe_chatter
                         @message_follower_ids widget='mail_followers'
-                        @message_ids widget='mail_thread' nolabel='1' 
+                        @message_ids widget='mail_thread' nolabel='1'
 
         ~record model='ir.ui.view' #search_fnx_pd_orders
             @name: Production Orders Search
@@ -159,7 +160,7 @@
                     @allergens
                     @coating
                     @state
-                
+
         ~record model='ir.actions.server' #action_fnx_sr_release_to_floor
            @name: Release to Floor
            @type: ir.actions.server
@@ -191,6 +192,42 @@
            @model_id ref='model_fnx_pd_order'
            @model: fnx.pd.order
            @key2: client_action_multi
+
+        ~record model='ir.ui.view' #fnx_pd_order_operator_acknowledged_form
+            @name: fnx_pd_order_operator_acknowledged_form
+            @model: fnx.pd.order
+            @arch type='xml'
+                ~form $Production_Orders version='7.0' create='false' edit='false'
+                    ~header
+                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
+                    ~sheet
+                        ~div .oe_left
+                            ~h1
+                                ~label for='order_no' $Order .oe_inline readonly='True'
+                                @order_no readonly='True' $Order .oe_inline
+                            ~h2
+                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
+                        ~div .oe_right .oe_button_box @button_box
+                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': [('state','not in',['released','stopped'])]}"
+                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': [('state','!=','running')]}"
+                        ~group
+                            ~group
+                                @schedule_date readonly='True'
+                            ~group
+                                @ordered_qty readonly='True'
+                                @completed_fis_qty readonly='True'
+                                @finish_date readonly='True'
+                        ~group
+                            ~group
+                                @coating readonly='True'
+                                @allergens readonly='True'
+                            ~group
+                                @dept readonly='True'
+                            ~group
+                                @cumulative_time widget='float_time' readonly='True'
+                        ~notebook
+                            ~page $Special_Instructions
+                                @special_instructions nolabel='1' readonly='True'
 
         // line views
 
@@ -271,7 +308,7 @@
             @view_id ref='fnx_pd_production_line_form'
             @act_window_id ref='action_fnx_pd_production_line'
 
-        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='30' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user' 
+        ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='30' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user'
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
 
@@ -293,9 +330,53 @@
                     ~notebook
                         ~page $Jobs
                             @order_ids nolabel='1'
+                                ~form $Production_Orders version='7.0' create='false'
+                                    ~header
+                                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
+                                    ~sheet
+                                        ~div .oe_left
+                                            ~h1
+                                                ~label for='order_no' $Order .oe_inline
+                                                @order_no readonly='True' $Order .oe_inline
+                                            ~h2
+                                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
+                                        ~div .oe_right .oe_button_box @button_box
+                                            ~span attrs="{'invisible': ['|',('special_instructions','=',False),('state','=','running')]}":  Check the Special Instructions
+                                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','not in',['released','stopped'])]}"
+                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
+                                        ~group
+                                            ~group
+                                                @acknowledge invisible='0'
+                                                @schedule_date
+                                            ~group
+                                                @ordered_qty
+                                                @completed_fis_qty readonly='True'
+                                                @finish_date readonly='True'
+                                        ~group
+                                            ~group
+                                                @coating
+                                                @allergens
+                                            ~group
+                                                @dept
+                                            ~group
+                                                @cumulative_time widget='float_time'
+                                        ~notebook
+                                            ~page $Special_Instructions attrs="{'invisible': [('special_instructions','=',False)]}"
+                                                @special_instructions nolabel='1'
+                                                ~button $Acknowledge name='pd_job_special_instructions_acknowledged' type='object'
+                                                //    context="{'default_order_no': order_no, 'default_item_id': item_id, 'default_schedule_date': schedule_date, 'default_ordered_qty': ordered_qty, 'default_completed_fis_qty': completed_fis_qty, 'default_finish_date': finish_date, 'default_coating': coating, 'default_allergens': allergens, 'default_dept': dept, 'default_special_instructions': special_instructions, 'default_state': state}")
+
+        ~record model='ir.ui.view' #fnx_pd_production_line_operator_acknowledged_form
+            @name: Lines
+            @model: fis_integration.production_line
+            @arch type='xml'
+                ~form $Production_Lines version='7.0' create='0' delete='0' edit='fnx_pd.group_fnx_pd_user'
+                    ~h1
+                        @desc readonly='True'
+                    ~notebook
+                        ~page $Jobs
+                            @order_ids nolabel='1' context="{'view_ref_id': 'fnx_pd_order_operator_form'}"
                                 ~tree fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
-                                    ~button string='Start Job' name='pd_job_start' states='released,stopped' type='object'
-                                    ~button string='Stop Job' name='pd_job_stop' states='running' type='object'
                                     @color invisible='1'
                                     @display_time
                                     @order_no
@@ -307,6 +388,40 @@
                                     @coating
                                     @schedule_date
                                     @state
+                                ~form $Production_Orders version='7.0' create='false'
+                                    ~header
+                                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
+                                    ~sheet
+                                        ~div .oe_left
+                                            ~h1
+                                                ~label for='order_no' $Order .oe_inline
+                                                @order_no readonly='True' $Order .oe_inline
+                                            ~h2
+                                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
+                                        ~div .oe_right .oe_button_box @button_box
+                                            ~span attrs="{'invisible': ['|',('special_instructions','=',False),('state','=','running')]}":  Check the Special Instructions
+                                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','not in',['released','stopped'])]}"
+                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
+                                        ~group
+                                            ~group
+                                                @acknowledge invisible='0'
+                                                @schedule_date
+                                            ~group
+                                                @ordered_qty
+                                                @completed_fis_qty readonly='True'
+                                                @finish_date readonly='True'
+                                        ~group
+                                            ~group
+                                                @coating
+                                                @allergens
+                                            ~group
+                                                @dept
+                                            ~group
+                                                @cumulative_time widget='float_time'
+                                        ~notebook
+                                            ~page $Special_Instructions attrs="{'invisible': [('special_instructions','=',False)]}"
+                                                @special_instructions nolabel='1'
+                                                ~button $Acknowledge name='fnx_pd.action_fnx_pd_operator_acknowledged_instructions)d' type='action'
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_operator_line
             @name: Lines

@@ -292,6 +292,19 @@ class fnx_pd_order(osv.Model):
                         return False
         return self.write(cr, uid, ids, vals, context=context)
 
+    def pd_job_special_instructions_acknowledged(self, cr, uid, ids, context=None):
+        return {
+                'name': 'Special Instructions Acknowledged',
+                'view_type': 'form',
+                'view_mode': 'form',
+                'view_id': self.pool.get('ir.model.data').get_object_reference(cr, uid, 'fnx_pd', 'fnx_pd_order_operator_acknowledged_form')[1],
+                'res_model': 'fnx.pd.order',
+                'res_id': ids[0],
+                'type': 'ir.actions.act_window',
+                'target': 'new',
+                'context': context,
+                }
+
     def pd_job_start(self, cr, uid, ids, context=None):
         return self.write(
                 cr, uid, ids,
