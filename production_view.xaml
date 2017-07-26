@@ -343,7 +343,7 @@
                                         ~div .oe_right .oe_button_box @button_box
                                             ~span attrs="{'invisible': ['|',('special_instructions','=',False),('state','=','running')]}":  Check the Special Instructions
                                             ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','not in',['released','stopped'])]}"
-                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
+                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': [('state','!=','running')]}"
                                         ~group
                                             ~group
                                                 @schedule_date
@@ -362,7 +362,7 @@
                                         ~notebook
                                             ~page $Special_Instructions attrs="{'invisible': [('special_instructions','=',False)]}"
                                                 @special_instructions nolabel='1'
-                                                ~button $Acknowledge name='pd_job_special_instructions_acknowledged' type='object'
+                                                ~button $Acknowledge name='pd_job_special_instructions_acknowledged' type='object' attrs="{'invisible': [('state','=','running')]}"
                                                 //    context="{'default_order_no': order_no, 'default_item_id': item_id, 'default_schedule_date': schedule_date, 'default_ordered_qty': ordered_qty, 'default_completed_fis_qty': completed_fis_qty, 'default_finish_date': finish_date, 'default_coating': coating, 'default_allergens': allergens, 'default_dept': dept, 'default_special_instructions': special_instructions, 'default_state': state}")
 
         ~record model='ir.ui.view' #fnx_pd_production_line_operator_acknowledged_form
