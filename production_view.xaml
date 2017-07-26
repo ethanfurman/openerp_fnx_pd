@@ -346,7 +346,6 @@
                                             ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
                                         ~group
                                             ~group
-                                                @acknowledge invisible='0'
                                                 @schedule_date
                                             ~group
                                                 @ordered_qty
@@ -404,7 +403,6 @@
                                             ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
                                         ~group
                                             ~group
-                                                @acknowledge invisible='0'
                                                 @schedule_date
                                             ~group
                                                 @ordered_qty
