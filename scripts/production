@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/sbin/suid-python --virtualenv
 # imports
 from __future__ import print_function
 
@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
 
 import email
+import os
 import shutil
 import time
 from openerplib import AttrDict, get_connection, get_records
@@ -23,7 +24,7 @@ from traceback import format_exception
 SOURCE = Path('/var/fis/production/')
 ARCHIVE = Path('/var/openerp/archive/production/')
 ERRORS = Path('/var/openerp/archive/production/error')
-USER_PW_DB = Path('/etc/openerp/credentials')
+USER_PW_DB = Path('%s/config/credentials' % os.environ['VIRTUAL_ENV'])
 
 # dummy values to be filled in by USER_PW_DB
 
