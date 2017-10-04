@@ -105,12 +105,13 @@
                     @coating $Coating
                     @allergens $Allergens
                     ~separator
-                    ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','running','stopped'])]"
+                    ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','released','running','stopped'])]"
                     ~filter $In_Progress @type_progress domain="[('state','in',['running','stopped'])]"
                     ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
-                    ~filter $Scheduled @type_draft domain="[('state','=','draft')]"
-                    ~filter $Sequenced @type_scheduled domain="[('state','=','sequenced')]"
+                    ~filter $New @type_draft domain="[('state','=','draft')]"
+                    ~filter $Scheduled @type_scheduled domain="[('state','=','sequenced')]"
+                    ~filter $Released @type_scheduled domain="[('state','=','released')]"
                     ~filter $Running @type_running domain="[('state','=','running')]"
                     ~filter $Paused @type_ready domain="[('state','=','stopped')]"
                     ~filter $Complete @type_complete domain="[('state','=','complete')]"
