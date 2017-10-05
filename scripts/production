@@ -259,9 +259,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     del data.dept
                     del data.order_no
                     current_record = current_records[0]
-                    if not current_record.ingredient_ids:
-                        if not dryrun:
-                            update_formula(OE, formula_id_rev, data, errors)
+                    if not dryrun:
+                        update_formula(OE, formula_id_rev, data, errors)
                     for k in data.keys():
                         if k.endswith('_id'):
                             if data[k] == current_record[k][0]:
