@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from collections import defaultdict
 from datetime import datetime
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
@@ -345,43 +346,27 @@ class production_line(osv.Model):
             ids = [ids]
         for record in self.browse(cr, uid, ids, context=context):
             res[record.id] = {}
-            total = initial = sequenced = needy = ready = fresh = 0
+            totals = defaultdict(int)
             for order in (record.order_ids or []):
-                state = order.state
-                pulled = order.confirmed
-                total += 1
-                if state in ('released', 'running','stopped'):
-                    # green (released to floor, supplies pulled  OR  running/stopped)
-                    ready += 1
-                elif state == 'draft' and pulled:
-                    # orange (needs scheduling and released to floor)
-                    needy += 1
-                elif state == 'sequenced':
-                    # blue (scheduled, supplies not pulled)
-                    sequenced += 1
-                elif order.sequence == 0:
-                    # purple (just created, needs scheduling)
-                    fresh += 1
-                elif state == 'draft' and not pulled:
-                    # black (just hangin' out)
-                    initial += 1
-                else:
-                    _logger.error(
-                            "unable to sort order %s {'state':%r, 'confirmed':%r, 'sequence':%r}",
-                            state, pulled, order.sequence,
-                            )
-            if sequenced + ready:
-                res[record.id]['order_run_total'] = '%d Orders' % (sequenced + ready)
+                totals[order.color] += 1
+            if totals['blue'] and totals['green']:
+                # sequenced and ready
+                res[record.id]['order_run_total'] = '%d Orders' % (totals['blue'] + totals['green'])
             else:
                 res[record.id]['order_run_total'] = '- 0 -'
+            total = sum([totals[k] for k in totals if k in ('red','orange','purple','black','blue','green')])
             if total:
-                total = '<span>%d Orders -- ' % total
-                needy = '<span style="color: orang;">%d</span>, ' % needy
-                fresh = '<span style="color: purple;">%d</span>, ' % fresh
-                initial = '<span style="color: black;">%d</span>, ' % initial
-                sequenced = '<span style="color: blue;">%d</span>, ' % sequenced
-                ready = '<span style="color: green;">%d</span></span>' % ready
-                res[record.id]['order_totals'] = total + needy + fresh + initial + sequenced + ready
+                # out of stock, supplies pulled / needs scheduled, new order / needs scheduled, default,
+                # scheduled, ready to go
+                total = '%d Orders -- ' % total
+                pieces = []
+                pieces.append( '<span style="color: red;">%d</span>' % totals['red'] )
+                pieces.append( '<span style="color: orange;">%d</span>' % totals['orange'] )
+                pieces.append( '<span style="color: purple;">%d</span>' % totals['purple'] )
+                pieces.append( '<span style="color: black;">%d</span>' % totals['black'] )
+                pieces.append( '<span style="color: blue;">%d</span>' % totals['blue'] )
+                pieces.append( '<span style="color: green;">%d</span>' % totals['green'] )
+                res[record.id]['order_totals'] = '<span>%s %s</span>' % (total, ', '.join(pieces))
             else:
                 res[record.id]['order_totals'] = '<span>- 0 -</span>'
         return res
