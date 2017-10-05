@@ -18,6 +18,16 @@ class fnx_pd_ingredient(osv.Model):
     _order = 'item_id'
     _rec_name = 'item_id'
 
+    def _get_qty_needed_desc(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        elif isinstance(ids, (int, long)):
+            ids = [ids]
+        for record in self.read(cr, uid, ids, fields=['qty_needed', 'qty_desc'], context=context):
+            res[record['id']] = '%.2f %s' % (record['qty_needed'], record['qty_desc'])
+        return res
+
     _columns = {
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
         'order_no': fields.related(
@@ -38,21 +48,38 @@ class fnx_pd_ingredient(osv.Model):
                 ('complete', 'Complete'),
                 ('cancelled', 'Cancelled'),
                 ]),
+        'order_product': fields.related(
+            'order_id', 'item_id', 'name',
+            string='Product',
+            type='char',
+            size=64,
+            ),
+        'order_schedule_date': fields.related(
+            'order_id', 'schedule_date',
+            string='Run date',
+            type='date',
+            ),
         'item_id': fields.many2one('product.product', 'Ingredient'),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
+        'qty_needed_desc': fields.function(
+            _get_qty_needed_desc,
+            string='Qty Needed (with units)',
+            type='char',
+            store={
+                'fnx.pd.ingredient': (lambda t, c, u, ids, ctx: ids, ['qty_needed', 'qty_desc'], 10),
+                },
+            ),
         'qty_avail': fields.related(
-            'item_id',
-            'qty_available',
-            type='float',
+            'item_id', 'qty_available',
             string='Qty Avail.',
+            type='float',
             ),
         'confirmed': fields.related(
-            'order_id',
-            'confirmed',
+            'order_id', 'confirmed',
+            string='Reserved by',
             type='selection',
             selection=[('fis', 'FIS'), ('user', 'OpenERP')],
-            string='Reserved by',
             ),
         }
 

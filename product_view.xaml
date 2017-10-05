@@ -23,6 +23,8 @@
                             @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
                                 ~tree
                                     @order_no
-                                    @qty_needed
+                                    @order_product
+                                    @qty_needed_desc
                                     @confirmed
                                     @order_state
+                                    @order_schedule_date
