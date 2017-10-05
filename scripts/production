@@ -10,12 +10,14 @@ import email
 import os
 import shutil
 import time
+from dbf import Date, Time, DateTime
 from openerplib import AttrDict, get_connection, get_records
+from openerplib.dates import LOCAL_TIME, date_to_str, datetime_to_str
 from constants import *
 from scription import *
 from VSS.constants import Weekday
 from VSS.BBxXlate.fisData import fisData
-from VSS.utils import fix_date, Date
+from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from recipe import get_fis_data, get_ingredients, F320, F322, F323
 from traceback import format_exception
@@ -241,12 +243,13 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     print(' ', errors[-1])
                     data.schedule_date = False
                 else:
-                    data.schedule_date = str(sched_date)
+                    data.schedule_date = date_to_str(sched_date)
                 data.completed_fis_qty = fis_row[F328.units_produced] or False
                 if data.completed_fis_qty:
                     data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
                     if data.finish_date:
-                        data.finish_date = str(data.finish_date) + " 00:00:00"
+                        finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0))
+                        data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
                 else:
                     data.finish_date = False
                 imported_orders.append(data.order_no)
@@ -343,7 +346,8 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             #     print('  schedule date missing')
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
-                data.finish_date = str(finish_date)
+                finish_datetime = DateTime.combine(finish_date, Time(17, 0, 0))
+                data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
             qty = fis_row[F328.units_produced] or False
             if qty and qty != open_order.completed_fis_qty:
                 data.completed_fis_qty = fis_row[F328.units_produced]
