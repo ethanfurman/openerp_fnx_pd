@@ -12,7 +12,7 @@
                     ~xpath expr="//group[@name='inventory']" position='after'
                         ~group string='Production Orders' groups='fnx_pd.group_fnx_pd_guest'
                             @prod_order_ids colspan='4' nolabel='1' readonly='1'
-                                ~tree
+                                ~tree default_order='order_schedule_date'
                                     @order_no
                                     @schedule_date
                                     @line_id
@@ -21,7 +21,7 @@
                                     @state
                         ~group string='Ingredient For' groups='fnx_pd.group_fnx_pd_guest'
                             @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
-                                ~tree
+                                ~tree default_order='order_schedule_date'
                                     @order_no
                                     @order_product
                                     @qty_needed_desc
