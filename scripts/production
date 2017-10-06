@@ -248,7 +248,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 if data.completed_fis_qty:
                     data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
                     if data.finish_date:
-                        finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0))
+                        finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0)).datetime()
                         data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
                 else:
                     data.finish_date = False
@@ -298,7 +298,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         OE.fnx_pd_order.create(dict(data), context={'script': True})
             except Exception:
                 lines = format_exception(*sys.exc_info())
-                print('skipping %s due to error:' % order_num)
+                error('skipping %s due to error:' % order_num)
                 error(''.join(lines))
 
     return imported_orders, errors
@@ -345,7 +345,7 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             #     print('  schedule date missing')
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
-                finish_datetime = DateTime.combine(finish_date, Time(17, 0, 0))
+                finish_datetime = DateTime.combine(finish_date, Time(17, 0, 0)).datetime()
                 data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
             qty = fis_row[F328.units_produced] or False
             if qty and qty != open_order.completed_fis_qty:
