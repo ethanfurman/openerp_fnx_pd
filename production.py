@@ -387,12 +387,12 @@ class production_line(osv.Model):
                 # scheduled, ready to go
                 total = '%d Orders -- ' % total
                 pieces = []
-                pieces.append( '<span style="color: red;">%d</span>' % totals['red'] )
-                pieces.append( '<span style="color: orange;">%d</span>' % totals['orange'] )
-                pieces.append( '<span style="color: purple;">%d</span>' % totals['purple'] )
-                pieces.append( '<span style="color: black;">%d</span>' % totals['black'] )
-                pieces.append( '<span style="color: blue;">%d</span>' % totals['blue'] )
-                pieces.append( '<span style="color: green;">%d</span>' % totals['green'] )
+                pieces.append( '<span style="color: red;font-weight: bold">%d</span>' % totals['red'] )
+                pieces.append( '<span style="color: #f80;font-weight: bold">%d</span>' % totals['orange'] )
+                pieces.append( '<span style="color: purple;font-weight: bold">%d</span>' % totals['purple'] )
+                pieces.append( '<span style="color: black;font-weight: bold">%d</span>' % totals['black'] )
+                pieces.append( '<span style="color: blue;font-weight: bold">%d</span>' % totals['blue'] )
+                pieces.append( '<span style="color: green;font-weight: bold">%d</span>' % totals['green'] )
                 res[record.id]['order_totals'] = '<span>%s %s</span>' % (total, ', '.join(pieces))
             else:
                 res[record.id]['order_totals'] = '<span>- 0 -</span>'
