@@ -87,9 +87,22 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
                 if db.startswith('test') or dryrun:
                     # do not send mail from test machines nor during dry runs
                     abort('errors during processing')
-                [fnxpd_manager] = get_records(OE.conn, 'ir.model.data', domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')])
-                [fnxpd_manager_group] = get_records(OE.conn, 'res.groups', domain=[('id','=',fnxpd_manager.res_id)])
-                managers = get_records(OE.conn, 'res.users', domain=[('id','in',fnxpd_manager_group.users)], fields=['id','login','email'])
+                [fnxpd_manager] = get_records(
+                        OE.conn,
+                        'ir.model.data',
+                        domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')],
+                        )
+                [fnxpd_manager_group] = get_records(
+                        OE.conn,
+                        'res.groups',
+                        domain=[('id','=',fnxpd_manager.res_id)],
+                        )
+                managers = get_records(
+                        OE.conn,
+                        'res.users',
+                        domain=[('id','in',fnxpd_manager_group.users)],
+                        fields=['id','login','email'],
+                        )
                 emails = [mgr.email for mgr in managers if mgr.id != 1 and mgr.email]
                 if emails:
                     print('-------', file=stderr)
@@ -167,13 +180,15 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
     '''
     add/update orders from spreadsheet; also add as-yet-unreferenced formulai
     '''
-    # production date, production line should not be updated from QALL once they have been changed in OpenERP
+    # production date, production line should not be updated from QALL once
+    # they have been changed in OpenERP
     global fis_f320, fis_f328
     get_fis_data()
     fis_f320 = fisData(320, keymatch='10%s  %s0')
     fis_f328 = fisData(328, keymatch='10%s000010000')
     errors = []
-    # list of imported current orders so that non-current orders still on file can be flagged completed/cancelled
+    # list of imported current orders so that non-current orders still on file
+    # can be flagged completed/cancelled
     imported_orders = []
     # completed_orders = []   # list of orders that are marked completed in FIS
     line_ids = dict(
@@ -200,10 +215,19 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 if only_order_no and order_num != only_order_no:
                     continue
                 print('  processing row %d, order %s' % (i, order_num), verbose=2)
-                item = get_records(OE.conn, 'product.product', fields=['id'], domain=[('xml_id','=',row[ITEM_CODE])], max_qty=1)
+                item = get_records(
+                        OE.conn,
+                        'product.product',
+                        fields=['id'],
+                        domain=[('xml_id','=',row[ITEM_CODE])],
+                        max_qty=1,
+                        )
                 if not item:
                     # couldn't find the product, record the error
-                    errors.append('<row %3d> order %s: product %s not found' % (i, order_num, row[ITEM_CODE]))
+                    errors.append(
+                            '<row %3d> order %s: product %s not found'
+                                % (i, order_num, row[ITEM_CODE]),
+                            )
                     print(' ', errors[-1])
                     continue
                 try:
@@ -216,7 +240,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 # pad the formula to 10 chars
                 formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
                 data.dept = fis_row[F328.dept_id]
-                # the value of fis_row[F328.prod_line] should be the textual representation of an integer between '01' and '99'
+                # the value of fis_row[F328.prod_line] should be the textual
+                # representation of an integer between '01' and '99'
                 try:
                     prodline_id = '%02d' % int(fis_row[F328.prod_line])
                 except ValueError:
@@ -225,7 +250,10 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     print(' ', errors[-1])
                     prodline_id = '98'
                 if prodline_id not in line_ids:
-                    errors.append('<row %3d> order %s: line_id %s does not exist (using 98)' % (i, order_num, prodline_id))
+                    errors.append(
+                            '<row %3d> order %s: line_id %s does not exist (using 98)'
+                                % (i, order_num, prodline_id),
+                            )
                     print(' ', errors[-1])
                     prodline_id = '98'
                 data.line_id = line_ids[prodline_id].id
@@ -239,7 +267,10 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     sched_date = ''
                 if not sched_date:
                     # no schedule date, record the error
-                    errors.append('<row %3d> order %s: missing or invalid schedule date' % (i, order_num))
+                    errors.append(
+                            '<row %3d> order %s: missing or invalid schedule date'
+                                % (i, order_num),
+                            )
                     print(' ', errors[-1])
                     data.schedule_date = False
                 else:
@@ -249,11 +280,19 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
                     if data.finish_date:
                         finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0)).datetime()
-                        data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
+                        data.finish_date = datetime_to_str(
+                                LOCAL_TIME.normalize(
+                                    LOCAL_TIME.localize(finish_datetime)
+                                ))
                 else:
                     data.finish_date = False
                 imported_orders.append(data.order_no)
-                current_records = get_records(OE.conn, 'fnx.pd.order', domain=[('order_no','=',data.order_no)], max_qty=1)
+                current_records = get_records(
+                        OE.conn,
+                        'fnx.pd.order',
+                        domain=[('order_no','=',data.order_no)],
+                        max_qty=1,
+                        )
                 if current_records:
                     print('  checking for changed fields', verbose=2)
                     del data.dept
@@ -346,7 +385,10 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 finish_datetime = DateTime.combine(finish_date, Time(17, 0, 0)).datetime()
-                data.finish_date = datetime_to_str(LOCAL_TIME.normalize(LOCAL_TIME.localize(finish_datetime)))
+                data.finish_date = datetime_to_str(
+                        LOCAL_TIME.normalize(
+                            LOCAL_TIME.localize(finish_datetime)
+                        ))
             qty = fis_row[F328.units_produced] or False
             if qty and qty != open_order.completed_fis_qty:
                 data.completed_fis_qty = fis_row[F328.units_produced]
@@ -358,7 +400,9 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             state = None
         else:
             # unknown, skip until tomorrow and hope somebody fixes it
-            print('order %s: unknown status %r' % (open_order.order_no, fis_row[F328.produced]), end=' . . . ')
+            print('order %s: unknown status %r'
+                    % (open_order.order_no, fis_row[F328.produced]), end=' . . . ',
+                    )
             state = None
         if state and state != open_order.state:
             data.state = state
