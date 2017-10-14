@@ -199,6 +199,17 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
             ))
     today = Date.today()
     # get current orders and construct a dict of (schedule_date, min(sequence))
+    multilines = dict([(r.key, r.line_ids) for r in get_records(OE.conn, 'fnx.pd.multiline', fields=['key', 'line_ids'])])
+    multistep = {}
+    for key, multiline in multilines.items():
+        lines = get_records(OE.conn, 'fnx.pd.multiline.entry', ids=multiline, fields=['line_id'])
+        ids = [l.line_id[0] for l in lines]
+        sequence = [(i, l.line_id[0]) for i, l in enumerate(lines)]
+        xml_ids_map = dict([(x.id, x) for x in get_records(OE.conn, 'fis_integration.production_line', ids=ids, fields=['xml_id'])])
+        xml_ids = []
+        for seq, xid in sequence:
+            xml_ids.append(xml_ids_map[xid])
+        multistep[key] = [r.xml_id for r in xml_ids]
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -241,100 +252,120 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
                 data.dept = fis_row[F328.dept_id]
                 # the value of fis_row[F328.prod_line] should be the textual
-                # representation of an integer between '01' and '99'
+                # representation of an integer between '01' and '99' for a simple order,
+                # or an alphabetic code representing a range of lines in a compound order
                 try:
-                    prodline_id = '%02d' % int(fis_row[F328.prod_line])
+                    # commented out for testing
+                    # line = fis_row[F328.prod_line]
+                    line = row[PROD_LINE]
+                    print('line is', line, verbose=2)
+                    if line.isdigit():
+                        # an error here causes us to default to line 98
+                        prodline_id = '%02d' % int(fis_row[F328.prod_line])
+                        if prodline_id not in line_ids:
+                            errors.append(
+                                    '<row %3d> order %s: line_id %s does not exist (using 98)'
+                                        % (i, order_num, prodline_id),
+                                    )
+                            print(' ', errors[-1])
+                            prodline_id = '98'
+                        prodline_ids = [prodline_id]
+                    elif line.isalpha():
+                        # an error here causes us to skip the line
+                        prodline_ids = multistep[line]
+                    else:
+                        raise ValueError()
                 except ValueError:
                     # no product line, record the error
-                    errors.append('<row %3d> order %s: no product line (using 98)' % (i, order_num))
+                    errors.append('<row %3d> order %s: no, or bad, product line (using 98)' % (i, order_num))
                     print(' ', errors[-1])
-                    prodline_id = '98'
-                if prodline_id not in line_ids:
-                    errors.append(
-                            '<row %3d> order %s: line_id %s does not exist (using 98)'
-                                % (i, order_num, prodline_id),
+                    prodline_ids = ['98']
+                print('prodline_ids:', prodline_ids, verbose=2)
+                steps = len(prodline_ids)
+                print('steps:', steps, verbose=2)
+                for step, prodline in enumerate(prodline_ids, start=1):
+                    data.line_id = line_ids[prodline].id
+                    data.item_id = item
+                    data.order_no = order_num
+                    if steps > 1:
+                        data.order_no += '-%d_%d' % (step, steps)
+                    print('data.order_no:', data.order_no, verbose=2)
+                    data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
+                    data.ordered_qty = fis_row[F328.qty_on_order]
+                    try:
+                        sched_date = fix_date(row[DATE], format='ymd')
+                    except ValueError:
+                        sched_date = ''
+                    if not sched_date:
+                        # no schedule date, record the error
+                        errors.append(
+                                '<row %3d> order %s: missing or invalid schedule date'
+                                    % (i, order_num),
+                                )
+                        print(' ', errors[-1])
+                        data.schedule_date = False
+                    else:
+                        data.schedule_date = date_to_str(sched_date)
+                    data.completed_fis_qty = fis_row[F328.units_produced] or False
+                    if data.completed_fis_qty:
+                        data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
+                        if data.finish_date:
+                            finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0)).datetime()
+                            data.finish_date = datetime_to_str(
+                                    LOCAL_TIME.normalize(
+                                        LOCAL_TIME.localize(finish_datetime)
+                                    ))
+                    else:
+                        data.finish_date = False
+                    imported_orders.append(data.order_no)
+                    current_records = get_records(
+                            OE.conn,
+                            'fnx.pd.order',
+                            domain=[('order_no','=',data.order_no)],
+                            max_qty=1,
                             )
-                    print(' ', errors[-1])
-                    prodline_id = '98'
-                data.line_id = line_ids[prodline_id].id
-                data.item_id = item
-                data.order_no = order_num
-                data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
-                data.ordered_qty = fis_row[F328.qty_on_order]
-                try:
-                    sched_date = fix_date(row[DATE], format='ymd')
-                except ValueError:
-                    sched_date = ''
-                if not sched_date:
-                    # no schedule date, record the error
-                    errors.append(
-                            '<row %3d> order %s: missing or invalid schedule date'
-                                % (i, order_num),
-                            )
-                    print(' ', errors[-1])
-                    data.schedule_date = False
-                else:
-                    data.schedule_date = date_to_str(sched_date)
-                data.completed_fis_qty = fis_row[F328.units_produced] or False
-                if data.completed_fis_qty:
-                    data.finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
-                    if data.finish_date:
-                        finish_datetime = DateTime.combine(data.finish_date, Time(17, 0, 0)).datetime()
-                        data.finish_date = datetime_to_str(
-                                LOCAL_TIME.normalize(
-                                    LOCAL_TIME.localize(finish_datetime)
-                                ))
-                else:
-                    data.finish_date = False
-                imported_orders.append(data.order_no)
-                current_records = get_records(
-                        OE.conn,
-                        'fnx.pd.order',
-                        domain=[('order_no','=',data.order_no)],
-                        max_qty=1,
-                        )
-                if current_records:
-                    print('  checking for changed fields', verbose=2)
-                    del data.dept
-                    del data.order_no
-                    current_record = current_records[0]
-                    if not dryrun:
-                        update_formula(OE, formula_id_rev, data, errors)
-                    for k in data.keys():
-                        if k.endswith('_id'):
-                            if data[k] == current_record[k][0]:
-                                del data[k]
-                        elif data[k] == current_record[k]:
-                            del data[k]
-                    if data:
-                        if sched_date:
-                            if Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                                print('deleting %s: Saturday schedule' % order_num)
-                                if not dryrun:
-                                    OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
-                                continue
-                            elif (sched_date - today).days > 21:
-                                print('deleting %s: more than three weeks out' % order_num)
-                                if not dryrun:
-                                    OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
-                                continue
-                        print('updating %s' % row[ORDER_NUM])
-                        for key in data:
-                            if data[key] != current_record[key]:
-                                print('  %s: %r -> %r' % (key, current_record[key], data[key]))
-                            else:
-                                print('  oops, forgot to delete key', key)
+                    if current_records:
+                        print('  checking for changed fields', verbose=2)
+                        del data.dept
+                        del data.order_no
+                        current_record = current_records[0]
                         if not dryrun:
-                            OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
-                elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                    print('skipping %s: Saturday schedule' % order_num)
-                    continue
-                else:
-                    if not dryrun:
-                        update_formula(OE, formula_id_rev, data, errors)
-                    print('creating %s' % row[ORDER_NUM], 'with:\n', data)
-                    if not dryrun:
-                        OE.fnx_pd_order.create(dict(data), context={'script': True})
+                            update_formula(OE, formula_id_rev, data, errors)
+                        for k in data.keys():
+                            if k.endswith('_id'):
+                                if data[k] == current_record[k][0]:
+                                    del data[k]
+                            elif data[k] == current_record[k]:
+                                del data[k]
+                        if data:
+                            if sched_date:
+                                if Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                                    print('deleting %s: Saturday schedule' % order_num)
+                                    if not dryrun:
+                                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                                    continue
+                                elif (sched_date - today).days > 21:
+                                    print('deleting %s: more than three weeks out' % order_num)
+                                    if not dryrun:
+                                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                                    continue
+                            print('updating %s' % row[ORDER_NUM])
+                            for key in data:
+                                if data[key] != current_record[key]:
+                                    print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                                else:
+                                    print('  oops, forgot to delete key', key)
+                            if not dryrun:
+                                OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
+                    elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
+                        print('skipping %s: Saturday schedule' % order_num)
+                        continue
+                    else:
+                        if not dryrun:
+                            update_formula(OE, formula_id_rev, data, errors)
+                        print('creating %s' % row[ORDER_NUM], 'with:\n', data)
+                        if not dryrun:
+                            OE.fnx_pd_order.create(dict(data), context={'script': True})
             except Exception:
                 lines = format_exception(*sys.exc_info())
                 error('skipping %s due to error:' % order_num)
@@ -357,7 +388,8 @@ def check_open_orders(OE, ignore=(), dryrun=False):
         data = AttrDict()
         print('   order %s' % open_order.order_no, end=' --> ')
         try:
-            fis_row = fis_f328[open_order.order_no]
+            order_no = open_order.order_no.split('-')[0]
+            fis_row = fis_f328[order_no]
         except KeyError:
             # no longer present, delete
             print('deleting missing order: %s' % open_order.order_no)

@@ -272,6 +272,11 @@
                     ~div .oe_right .oe_button_box @button_box
                         ~button $Add_Cleaning groups='fnx_pd.group_fnx_pd_user' name='%(fnx_pd.action_fnx_pd_add_cleaning_order)d' type='action' context="{'default_line_id': id}"
                     ~notebook
+                        ~page $Debugging
+                            ~label for='xml_id'
+                            @xml_id
+                            ~label for='name'
+                            @name
                         ~page $Schedule
                             @order_ids nolabel='1'
                                 ~tree create='0' delete='0' fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
@@ -310,6 +315,8 @@
             @act_window_id ref='action_fnx_pd_production_line'
 
         ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='30' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user'
+
+        // Operator Menu
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
 
@@ -444,3 +451,44 @@
             @act_window_id ref='action_fnx_pd_production_operator_line'
 
         ~menuitem name='Lines' #menu_fnx_pd_production_operator_lines parent='menu_fnx_pd_operator' sequence='20' action='action_fnx_pd_production_operator_line'
+
+        // Config Menu
+
+        ~menuitem @Configure #menu_fnx_pd_config parent='menu_fnx_pd_root' sequence='40' groups='group_fnx_pd_user'
+
+        ~record model='ir.ui.view' #fnx_pd_multiline_tree
+            @name: fnx_pd_multiline_tree
+            @model: fnx.pd.multiline
+            @priority eval='10'
+            @arch type='xml'
+                ~tree $Multilines
+                    @key
+                    @name
+
+        ~record model='ir.ui.view' #fnx_pd_multiline_form
+            @name: fnx_pd_multiline_form
+            @model: fnx.pd.multiline
+            @priority eval='10'
+            @groups_id eval="[(4, ref('fnx_pd.group_fnx_pd_user'))]"
+            @arch type='xml'
+                ~form $Multilines version='7.0'
+                    ~group col='6'
+                        ~group colspan='4'
+                            @name
+                        ~group colspan='2'
+                            @key
+                    ~group
+                        @line_ids context="{'default_map_id': id}"
+                            ~tree editable='bottom'
+                                @sequence widget='handle'
+                                @line_id
+
+        ~record model='ir.actions.act_window' #action_fnx_pd_multiline
+            @name: Line Groups
+            @res_model: fnx.pd.multiline
+            @view_type: form
+            @view_id ref='fnx_pd_multiline_tree'
+            @view_mode: tree,form
+
+        ~menuitem $Multilines #menu_item_fnx_pd_multiline parent='menu_fnx_pd_config' sequence='50' action='action_fnx_pd_multiline'
+

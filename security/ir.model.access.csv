@@ -1,8 +1,10 @@
-"id","name","model_id:id","group_id:id","perm_read","perm_write","perm_create","perm_unlink"
-"access_fnx_pd_order_all","User","model_fnx_pd_order","base.group_user",1,0,0,0
-"access_fnx_pd_order_guest","FnxPd Guest","model_fnx_pd_order","group_fnx_pd_guest",1,0,0,0
-"access_fnx_pd_order_operator","FnxPd Operator","model_fnx_pd_order","group_fnx_pd_operator",1,1,0,0
-"access_fnx_pd_order_user","FnxPd User","model_fnx_pd_order","group_fnx_pd_user",1,1,0,0
-"access_fnx_pd_order_manager","FnxPd Manager","model_fnx_pd_order","group_fnx_pd_manager",1,1,1,1
-"access_fnx_pd_ingredient_all","User","model_fnx_pd_ingredient","base.group_user",1,0,0,0
-"access_fnx_pd_ingredient_manager","FnxPd Manager","model_fnx_pd_ingredient","group_fnx_pd_manager",1,1,1,1
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_fnx_pd_order_all,User,model_fnx_pd_order,base.group_user,1,0,0,0
+access_fnx_pd_order_guest,FnxPd Guest,model_fnx_pd_order,group_fnx_pd_guest,1,0,0,0
+access_fnx_pd_order_operator,FnxPd Operator,model_fnx_pd_order,group_fnx_pd_operator,1,1,0,0
+access_fnx_pd_order_user,FnxPd User,model_fnx_pd_order,group_fnx_pd_user,1,1,0,0
+access_fnx_pd_order_manager,FnxPd Manager,model_fnx_pd_order,group_fnx_pd_manager,1,1,1,1
+access_fnx_pd_ingredient_all,User,model_fnx_pd_ingredient,base.group_user,1,0,0,0
+access_fnx_pd_ingredient_manager,FnxPd Manager,model_fnx_pd_ingredient,group_fnx_pd_manager,1,1,1,1
+access_fnx_pd_multiline,access_fnx_pd_multiline,model_fnx_pd_multiline,group_fnx_pd_user,1,1,1,1
+access_fnx_pd_multiline.entry,access_fnx_pd_multiline_entry,model_fnx_pd_multiline_entry,group_fnx_pd_user,1,1,1,1

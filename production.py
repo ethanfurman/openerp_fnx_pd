@@ -420,6 +420,28 @@ class production_line(osv.Model):
             ),
         }
 
+
+class production_line_map(osv.Model):
+    "mapping from alpha code  to multiple lines, e.g. GB -> 05, 01"
+    _name = "fnx.pd.multiline"
+
+    _columns = {
+        'name': fields.char('Multiline Name', size=128),
+        'key': fields.char('FIS ID', size=2, required=True),
+        'line_ids': fields.one2many('fnx.pd.multiline.entry', 'map_id', string='Line'),
+        }
+
+
+class production_line_map_entry(osv.Model):
+    "production line map entry"
+    _name = 'fnx.pd.multiline.entry'
+
+    _columns = {
+        'map_id': fields.many2one('fnx.pd.multiline', 'Multiline Bundle', ondelete='cascade'),
+        'line_id': fields.many2one('fis_integration.production_line', string='Line', ondelete='restrict'),
+        'sequence': fields.integer('Sequence', help='allows drag-n-drop ordering; actual value is irrelevent'),
+        }
+
 class pd_order_clean(osv.TransientModel):
     _name = 'fnx.pd.order.clean'
 
