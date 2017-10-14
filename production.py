@@ -424,9 +424,32 @@ class production_line(osv.Model):
 class production_line_map(osv.Model):
     "mapping from alpha code  to multiple lines, e.g. GB -> 05, 01"
     _name = "fnx.pd.multiline"
+    _rec_name = 'key'
+
+    def _calc_name(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        for multiline in self.browse(cr, uid, ids, context=context):
+            names = []
+            for line in multiline.line_ids:
+                names.append(line.line_id.desc)
+            res[multiline.id] = u' \u21e8 '.join(names)
+        return res
+
 
     _columns = {
-        'name': fields.char('Multiline Name', size=128),
+        'name': fields.function(
+            _calc_name,
+            string='Line Configuration',
+            type='char',
+            size=128,
+            store={
+                'fnx.pd.multiline': (lambda t, c, u, ids, ctx: ids, ['line_ids'], 10),
+                },
+            ),
         'key': fields.char('FIS ID', size=2, required=True),
         'line_ids': fields.one2many('fnx.pd.multiline.entry', 'map_id', string='Line'),
         }
