@@ -272,11 +272,6 @@
                     ~div .oe_right .oe_button_box @button_box
                         ~button $Add_Cleaning groups='fnx_pd.group_fnx_pd_user' name='%(fnx_pd.action_fnx_pd_add_cleaning_order)d' type='action' context="{'default_line_id': id}"
                     ~notebook
-                        ~page $Debugging
-                            ~label for='xml_id'
-                            @xml_id
-                            ~label for='name'
-                            @name
                         ~page $Schedule
                             @order_ids nolabel='1'
                                 ~tree create='0' delete='0' fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
