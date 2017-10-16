@@ -80,10 +80,6 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
             imported_orders, errors = import_spreadsheet(OE, file, order or None, dryrun=dryrun)
             check_open_orders(OE, dryrun=dryrun)
             if errors:
-                # print to stdout
-                print('-------', file=stderr)
-                for err in errors:
-                    print(err, file=stderr)
                 if db.startswith('test') or dryrun:
                     # do not send mail from test machines nor during dry runs
                     abort('errors during processing')
@@ -210,6 +206,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
         for seq, xid in sequence:
             xml_ids.append(xml_ids_map[xid])
         multistep[key] = [r.xml_id for r in xml_ids]
+    for key, lines in multistep.items():
+        print(key, lines)
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -239,13 +237,13 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                             '<row %3d> order %s: product %s not found'
                                 % (i, order_num, row[ITEM_CODE]),
                             )
-                    print(' ', errors[-1])
+                    error(' ', errors[-1])
                     continue
                 try:
                     fis_row = fis_f328[order_num]
                 except KeyError:
                     errors.append('  cannot find %s in FIS' % order_num)
-                    print(' ', errors[-1])
+                    error(' ', errors[-1])
                     continue
                 item = item[0].id
                 # pad the formula to 10 chars
@@ -264,10 +262,10 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         prodline_id = '%02d' % int(fis_row[F328.prod_line])
                         if prodline_id not in line_ids:
                             errors.append(
-                                    '<row %3d> order %s: line_id %s does not exist (using 98)'
+                                    '<row %3d> order %s: line_id %r does not exist (using 98)'
                                         % (i, order_num, prodline_id),
                                     )
-                            print(' ', errors[-1])
+                            error(' ', errors[-1])
                             prodline_id = '98'
                         prodline_ids = [prodline_id]
                     elif line.isalpha():
@@ -277,8 +275,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         raise ValueError()
                 except ValueError:
                     # no product line, record the error
-                    errors.append('<row %3d> order %s: no, or bad, product line (using 98)' % (i, order_num))
-                    print(' ', errors[-1])
+                    errors.append('<row %3d> order %s: no, or bad, product line <%r> (using 98)' % (i, order_num, line))
+                    error(' ', errors[-1])
                     prodline_ids = ['98']
                 print('prodline_ids:', prodline_ids, verbose=2)
                 steps = len(prodline_ids)
@@ -302,7 +300,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                                 '<row %3d> order %s: missing or invalid schedule date'
                                     % (i, order_num),
                                 )
-                        print(' ', errors[-1])
+                        error(' ', errors[-1])
                         data.schedule_date = False
                     else:
                         data.schedule_date = date_to_str(sched_date)
@@ -326,8 +324,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                             )
                     if current_records:
                         print('  checking for changed fields', verbose=2)
-                        del data.dept
-                        del data.order_no
+                        # del data.dept
+                        # del data.order_no
                         current_record = current_records[0]
                         if not dryrun:
                             update_formula(OE, formula_id_rev, data, errors)
@@ -340,30 +338,30 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         if data:
                             if sched_date:
                                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                                    print('deleting %s: Saturday schedule' % order_num)
+                                    print('deleting %s: Saturday schedule' % order_num, verbose=2)
                                     if not dryrun:
                                         OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
                                     continue
                                 elif (sched_date - today).days > 21:
-                                    print('deleting %s: more than three weeks out' % order_num)
+                                    print('deleting %s: more than three weeks out' % order_num, verbose=2)
                                     if not dryrun:
                                         OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
                                     continue
-                            print('updating %s' % row[ORDER_NUM])
+                            print('updating %s' % row[ORDER_NUM], verbose=2)
                             for key in data:
                                 if data[key] != current_record[key]:
-                                    print('  %s: %r -> %r' % (key, current_record[key], data[key]))
+                                    print('  %s: %r -> %r' % (key, current_record[key], data[key]), verbose=2)
                                 else:
                                     print('  oops, forgot to delete key', key)
                             if not dryrun:
                                 OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
                     elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                        print('skipping %s: Saturday schedule' % order_num)
+                        print('skipping %s: Saturday schedule' % order_num, verbose=2)
                         continue
                     else:
                         if not dryrun:
                             update_formula(OE, formula_id_rev, data, errors)
-                        print('creating %s' % row[ORDER_NUM], 'with:\n', data)
+                        print('creating %s' % row[ORDER_NUM], 'with:\n', data, verbose=2)
                         if not dryrun:
                             OE.fnx_pd_order.create(dict(data), context={'script': True})
             except Exception:
@@ -386,13 +384,13 @@ def check_open_orders(OE, ignore=(), dryrun=False):
     print('checking %d open orders in OE' % len(oe_open_orders))
     for open_order in oe_open_orders:
         data = AttrDict()
-        print('   order %s' % open_order.order_no, end=' --> ')
+        print('   order %s' % open_order.order_no, end=' --> ', verbose=2)
         try:
             order_no = open_order.order_no.split('-')[0]
             fis_row = fis_f328[order_no]
         except KeyError:
             # no longer present, delete
-            print('deleting missing order: %s' % open_order.order_no)
+            print('deleting missing order: %s' % open_order.order_no, verbose=2)
             if not dryrun:
                 OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
             continue
@@ -401,12 +399,12 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             sched_date = fix_date(fis_row[F328.prod_sched_date], format='ymd') or False
             if sched_date:
                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
-                    print('deleting %s: Saturday schedule' % open_order.order_no)
+                    print('deleting %s: Saturday schedule' % open_order.order_no, verbose=2)
                     if not dryrun:
                         OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
                     continue
                 elif (sched_date - today).days > 21:
-                    print('deleting %s: more than three weeks out' % open_order.order_no)
+                    print('deleting %s: more than three weeks out' % open_order.order_no, verbose=2)
                     if not dryrun:
                         OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
                     continue
@@ -439,7 +437,7 @@ def check_open_orders(OE, ignore=(), dryrun=False):
         if state and state != open_order.state:
             data.state = state
         if data:
-            print('updating with: %s' % (dict(data), ))
+            print('updating with: %s' % (dict(data), ), verbose=2)
             if not dryrun:
                 OE.fnx_pd_order.write([open_order.id], dict(data), context={'script': True})
         else:
