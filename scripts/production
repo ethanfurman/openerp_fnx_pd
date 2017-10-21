@@ -19,7 +19,7 @@ from VSS.constants import Weekday
 from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
-from recipe import get_fis_data, get_ingredients, F320, F322, F323
+from recipe import get_fis_data, get_item_ingredients, F320, F322, F323
 from traceback import format_exception
 
 
@@ -207,7 +207,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
             xml_ids.append(xml_ids_map[xid])
         multistep[key] = [r.xml_id for r in xml_ids]
     for key, lines in multistep.items():
-        print(key, lines)
+        print(key, lines, verbose=2)
     with open_workbook(file_name) as work_book:
         for sheet in work_book:
             if sheet.name.lower() == '21 day production schedule':
@@ -448,7 +448,7 @@ def update_formula(OE, id_rev, data, errors):
     formula = fis_f320[id_rev]
     target_item = id_rev[0][:6]
     # create the individual ingredients
-    ingreds = get_ingredients(*id_rev, food_only=True)
+    ingreds = get_item_ingredients(*id_rev, food_only=True)
     ingreds_ids = []
     if IFDT1_REV.has_key(id_rev):
         yield_qty = IFDT1_REV[id_rev][F323.yield_in_units]
