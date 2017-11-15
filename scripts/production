@@ -19,7 +19,7 @@ from VSS.constants import Weekday
 from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
-from recipe import get_fis_data, get_item_ingredients, F320, F322, F323
+from recipe import get_fis_data, get_order_ingredients, F320, F329
 from traceback import format_exception
 
 
@@ -70,7 +70,7 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
-    OE.inventory = AttrDict()
+    OE.inventory = dict([(r.xml_id, r.id) for r in get_records(OE.conn, 'product.product', fields=['xml_id'])])
     failed = []
     for group in ((files, failed), ):
         time.sleep(5)
@@ -186,7 +186,6 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
     # list of imported current orders so that non-current orders still on file
     # can be flagged completed/cancelled
     imported_orders = []
-    # completed_orders = []   # list of orders that are marked completed in FIS
     line_ids = dict(
             (r.xml_id, r) for r in get_records(
                 OE.conn,
@@ -246,16 +245,12 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     error(' ', errors[-1])
                     continue
                 item = item[0].id
-                # pad the formula to 10 chars
-                formula_id_rev = '%-10s' % fis_row[F328.formula_id], fis_row[F328.formula_rev]
                 data.dept = fis_row[F328.dept_id]
                 # the value of fis_row[F328.prod_line] should be the textual
                 # representation of an integer between '01' and '99' for a simple order,
                 # or an alphabetic code representing a range of lines in a compound order
                 try:
-                    # commented out for testing
-                    # line = fis_row[F328.prod_line]
-                    line = row[PROD_LINE]
+                    line = fis_row[F328.prod_line]
                     print('line is', line, verbose=2)
                     if line.isdigit():
                         # an error here causes us to default to line 98
@@ -324,11 +319,9 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                             )
                     if current_records:
                         print('  checking for changed fields', verbose=2)
-                        # del data.dept
-                        # del data.order_no
                         current_record = current_records[0]
                         if not dryrun:
-                            update_formula(OE, formula_id_rev, data, errors)
+                            update_formula(OE, order_num, data, errors)
                         for k in data.keys():
                             if k.endswith('_id'):
                                 if data[k] == current_record[k][0]:
@@ -360,7 +353,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         continue
                     else:
                         if not dryrun:
-                            update_formula(OE, formula_id_rev, data, errors)
+                            update_formula(OE, order_num, data, errors)
                         print('creating %s' % row[ORDER_NUM], 'with:\n', data, verbose=2)
                         if not dryrun:
                             OE.fnx_pd_order.create(dict(data), context={'script': True})
@@ -410,8 +403,6 @@ def check_open_orders(OE, ignore=(), dryrun=False):
                     continue
                 data.schedule_date = str(sched_date)
             print('  using %r' % sched_date, end=' . . . ', verbose=2)
-            # if not open_order.schedule_date:
-            #     print('  schedule date missing')
             finish_date = fix_date(fis_row[F328.prod_date], format='mdy') or False
             if finish_date:
                 finish_datetime = DateTime.combine(finish_date, Time(17, 0, 0)).datetime()
@@ -443,52 +434,40 @@ def check_open_orders(OE, ignore=(), dryrun=False):
         else:
             print()
 
-def update_formula(OE, id_rev, data, errors):
-    from recipe import IFDT1_REV
-    formula = fis_f320[id_rev]
-    target_item = id_rev[0][:6]
+def update_formula(OE, order_num, data, errors):
+    echo('updating formula for', order_num)
+    sales_header = fis_f328[order_num]
+    # pad the formula to 10 chars
+    formula_id_rev = '%-10s' % sales_header[F328.formula_id], sales_header[F328.formula_rev]
+    formula_header = fis_f320[formula_id_rev]
     # create the individual ingredients
-    ingreds = get_item_ingredients(*id_rev, food_only=True)
+    target_item, ingreds = get_order_ingredients(order_num, include_null=False)
     ingreds_ids = []
-    if IFDT1_REV.has_key(id_rev):
-        yield_qty = IFDT1_REV[id_rev][F323.yield_in_units]
-        scale = data.ordered_qty / yield_qty
-    else:
-        errors.append('unable to find yield qty for %s-%s' % id_rev)
-        yield_qty = 0.0
-        scale = 0.0
-    discard = False  # in case ingreds is empty
-    for item_id, key, ingredient, _ in ingreds:
-        if item_id == target_item:
+    for item_xml_id, key, rec, _ in ingreds:
+        if item_xml_id == target_item:
             continue
-        discard = False
-        item_xml_id = ingredient[F322.ingr_id_batch_1]
-        qty_needed = ingredient[F322.qty_batch_1] * scale
-        qty_desc = ingredient[F322.desc_batch_1][-8:]
         item_id = OE.inventory.get(item_xml_id)
         if item_id is None:
             try:
                 item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
             except IndexError:
-                discard = True
-                errors.append('unable to find ingredient %r in formula %s' % (item_xml_id, id_rev))
+                errors.append('unable to find ingredient %r in order %s' % (item_xml_id, order_num))
                 OE.fnx_pd_ingredient.unlink(ingreds_ids)
                 ingreds_ids = []
                 break
+        qty = rec[F329.qty_batch_1]
+        um = rec[F329.units_batch_1]
         ingreds_ids.append(OE.fnx_pd_ingredient.create({
                 'item_id':item_id,
-                'qty_needed':qty_needed,
-                'qty_desc':' '.join(qty_desc.split()),
+                'qty_needed':qty,
+                'qty_desc':um,
                 }))
-    if discard or not yield_qty:
-        OE.fnx_pd_ingredient.unlink(ingreds_ids)
-        ingreds_ids = []
-    elif ingreds_ids:
+    if ingreds_ids:
         data.ingredient_ids = [(6, 0, ingreds_ids)]
     # add the formula details
-    data.formula_code ='%s [%s-%s]' % (formula[F320.desc], id_rev[0].strip(), id_rev[1])
-    data.coating = formula[F320.coating]
-    data.allergens = formula[F320.allergens]
+    data.formula_code ='%s [%s-%s]' % (formula_header[F320.desc], formula_id_rev[0].strip(), formula_id_rev[1])
+    data.coating = formula_header[F320.coating]
+    data.allergens = formula_header[F320.allergens]
 
 def update_order(values):
     pass
