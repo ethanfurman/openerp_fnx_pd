@@ -12,8 +12,6 @@
     'website': 'www.openerp.com',
     'depends': [
             'base',
-            'cmms',
-            'crm',
             'fis_integration',
             'fnx',
             'product',
