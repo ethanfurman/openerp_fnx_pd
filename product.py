@@ -23,6 +23,3 @@ class product_product(osv.Model):
             domain=[('order_state','not in',['complete','cancelled'])],
             ),
         }
-
-product_product()
-

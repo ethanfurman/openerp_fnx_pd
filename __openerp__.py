@@ -23,6 +23,9 @@
             'product_view.xaml',
             'production_view.xaml',
         ],
+    'css':[
+        'static/src/css/fnx_pd.css',
+        ],
     'test': [],
     'installable': True,
     'active': False,
