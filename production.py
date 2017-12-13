@@ -71,7 +71,7 @@ class fnx_pd_ingredient(osv.Model):
                 },
             ),
         'qty_avail': fields.related(
-            'item_id', 'qty_available',
+            'item_id', 'fis_qty_available',
             string='Qty Avail.',
             type='float',
             ),
@@ -302,7 +302,7 @@ class fnx_pd_order(osv.Model):
             if record.confirmed == 'user':
                 vals['confirmed'] = False
                 for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'qty_available': ingredient.item_id.qty_available+ingredient.qty_needed})
+                    res = ingredient.item_id.write({'fis_qty_consumed': ingredient.item_id.fis_qty_consumed+ingredient.qty_needed})
                     if not res:
                         return False
         return self.write(cr, uid, ids, vals, context=context)
@@ -315,7 +315,7 @@ class fnx_pd_order(osv.Model):
             if record.confirmed != 'fis':
                 vals['confirmed'] = 'user'
                 for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'qty_available': ingredient.item_id.qty_available-ingredient.qty_needed})
+                    res = ingredient.item_id.write({'fis_qty_consumed': ingredient.item_id.fis_qty_consumed-ingredient.qty_needed})
                     if not res:
                         return False
         return self.write(cr, uid, ids, vals, context=context)
