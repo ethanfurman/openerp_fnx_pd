@@ -70,7 +70,14 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
-    OE.inventory = dict([(r.xml_id, r.id) for r in get_records(OE.conn, 'product.product', fields=['xml_id'])])
+    OE.inventory = dict([
+        (r.xml_id, r.id)
+        for r in get_records(
+                OE.conn,
+                'product.product',
+                fields=['id', 'xml_id'],
+                domain=[('module','=','F135')],
+                )])
     failed = []
     for group in ((files, failed), ):
         time.sleep(5)
@@ -223,13 +230,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 if only_order_no and order_num != only_order_no:
                     continue
                 print('  processing row %d, order %s' % (i, order_num), verbose=2)
-                item = get_records(
-                        OE.conn,
-                        'product.product',
-                        fields=['id'],
-                        domain=[('xml_id','=',row[ITEM_CODE])],
-                        max_qty=1,
-                        )
+                item = OE.inventory.get(row[ITEM_CODE])
                 if not item:
                     # couldn't find the product, record the error
                     errors.append(
