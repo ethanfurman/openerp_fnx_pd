@@ -1,0 +1,58 @@
+#!/usr/local/sbin/suid-python --virtualenv
+"""\
+look for today's version of a file for a certain amount of time;
+return actual file name if found
+"""
+
+# imports
+from __future__ import print_function
+
+from scription import *
+from antipathy import Path
+from datetime import date
+from time import sleep, time
+from logging import getLogger, INFO, Formatter, handlers
+
+logger = getLogger()
+logger.setLevel(INFO)
+_handler = handlers.RotatingFileHandler(
+        '/var/log/openerp/latest_file.log',
+        maxBytes=1024*1024*1024,
+        backupCount=30,
+        )
+_formatter = Formatter('%(process)06d %(asctime)s %(name)-25s %(message)s')
+_handler.setFormatter(_formatter)
+logger.addHandler(_handler)
+del _handler, _formatter
+
+@Command(
+        path=('path to look in for QALL_yyyymmdd.xls files', ),
+        timeout=('time, in minutes, to wait for file to appear', OPTION),
+        )
+def qall(path, timeout=0):
+    today = 'QALL_%s.xls' % date.today().strftime('%Y%m%d')
+    logger.info('looking for: %s', today)
+    start = time()
+    while timeout >= 0:
+        qall_files = sorted(Path(path).glob('QALL_*.xls')) or ['']
+        latest = qall_files[-1]
+        if latest.endswith(today):
+            stop = time()
+            elapsed = stop - start
+            hours, minutes = divmod(elapsed, 60)
+            minutes, seconds = divmod(minutes, 60)
+            logger.info('success: %s (apx %02d:%02d)', latest, hours, minutes)
+            echo(latest)
+            break
+        timeout -= 1
+        if timeout >= 0:
+            sleep(60)
+    else:
+        stop = time()
+        elapsed = stop - start
+        hours, minutes = divmod(elapsed, 60)
+        minutes, seconds = divmod(minutes, 60)
+        logger.info('never found (after apx %02d:%02d)', hours, minutes)
+        abort()
+
+Run()
