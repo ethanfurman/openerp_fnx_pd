@@ -1,2 +1,3 @@
 scripts/production
 scripts/latest_file
+scripts/constants.py
