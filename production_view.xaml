@@ -50,10 +50,10 @@
                         ~group
                             ~group
                                 @schedule_date
-                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Run_Date
-                                @confirmed readonly='True'
+                                @schedule_date_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Run_Date attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
+                                @confirmed readonly='True' attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                             ~group
-                                @ordered_qty
+                                @ordered_qty attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                                 @completed_fis_qty readonly='True'
                                 @finish_date readonly='True'
                         ~group
@@ -63,7 +63,7 @@
                             ~group
                                 @dept
                                 @line_id
-                                @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line
+                                @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                             ~group
                                 @cumulative_time widget='float_time'
                         ~notebook
