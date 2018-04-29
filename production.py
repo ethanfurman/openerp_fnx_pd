@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 class fnx_pd_ingredient(osv.Model):
-    _name = 'fnx.pd.ingredient'
+    _name = 'fnx.pd.ingredient' # (F329)
     _order = 'item_id'
     _rec_name = 'item_id'
 
@@ -29,7 +29,8 @@ class fnx_pd_ingredient(osv.Model):
         return res
 
     _columns = {
-        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade'),
+        'name': fields.char('Name', size=13, required=True),  # 'order:item'  (6:6)
+        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade', required=True),
         'order_no': fields.related(
             'order_id', 'order_no',
             string='Order #',
@@ -59,7 +60,7 @@ class fnx_pd_ingredient(osv.Model):
             string='Run date',
             type='date',
             ),
-        'item_id': fields.many2one('product.product', 'Ingredient'),
+        'item_id': fields.many2one('product.product', 'Ingredient', required=True),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
         'qty_needed_desc': fields.function(
@@ -83,8 +84,13 @@ class fnx_pd_ingredient(osv.Model):
             ),
         }
 
+    _sql_constraints = [
+            ('uniq_order_item', 'unique(order_id, item_id)', 'Item ingredient must be unique per order'),
+            ]
+
 
 class fnx_pd_order(osv.Model):
+    "production order" # (F328)
     _name = 'fnx.pd.order'
     _description = 'production order'
     _inherit = ['mail.thread']
@@ -359,6 +365,56 @@ class fnx_pd_order(osv.Model):
     def pd_state(self, cr, uid, ids, context):
         state = context.pop('new_state')
         return self.write(cr, uid, ids, {'state':state}, context=context)
+
+class fnx_pd_product_formula(osv.Model):
+    "product formula information" # (F320)
+    _name = 'fnx.pd.product.formula'
+    _order = 'formula'
+
+    _columns = {
+        'name': fields.char('Name', size=6),
+        'formula': fields.char('Formula #', size=14),
+        'description': fields.char('Name', size=64),
+        'coating': fields.char('Coating', size=10, track_visibility='onchange'),
+        'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
+        'ingredient_ids': fields.one2many('fnx.pd.product.ingredient', 'formula_id', 'Ingredients'),
+        }
+
+class fnx_pd_product_ingredient(osv.Model):
+    "ingredient for product formula" # (F322)
+    _name = 'fnx.pd.product.ingredient'
+    _order = 'formula_id'
+
+    def _get_qty_needed_desc(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        elif isinstance(ids, (int, long)):
+            ids = [ids]
+        for record in self.read(cr, uid, ids, fields=['qty_needed', 'qty_desc'], context=context):
+            res[record['id']] = '%.2f %s' % (record['qty_needed'], record['qty_desc'])
+        return res
+
+    _columns = {
+        'name': fields.char('Name', size=17),  # 'formula-rev:item'  (6-3:6)
+        'formula_id': fields.many2one('fnx.pd.product.formula'),
+        'item_id': fields.many2one('product.product', string='Ingredient'),
+        'qty_needed': fields.float('Qty Needed'),
+        'qty_desc': fields.char('Qty Unit', size=8),
+        'qty_needed_desc': fields.function(
+            _get_qty_needed_desc,
+            string='Qty Needed (with units)',
+            type='char',
+            store={
+                'fnx.pd.ingredient': (lambda t, c, u, ids, ctx: ids, ['qty_needed', 'qty_desc'], 10),
+                },
+            ),
+        'qty_avail': fields.related(
+            'item_id', 'fis_qty_available',
+            string='Qty Avail.',
+            type='float',
+            ),
+        }
 
 class production_line(osv.Model):
     "production line"

@@ -1,6 +1,7 @@
 from osv import osv, fields
-import logging
+from openerp.tools import SUPERUSER_ID
 from fis_integration.scripts import recipe
+import logging
 
 _logger = logging.getLogger(__name__)
 
@@ -23,14 +24,63 @@ class product_product(osv.Model):
             values['fis_qty_makeable'] = recipe.make_on_hand(row['xml_id'])
         return res
 
-    def _get_qty_update_ids(self, cr, uid, changed_ids, context=None):
-        if isinstance(changed_ids, (int, long)):
-            changed_ids = [changed_ids]
-        ids = []
-        datas = self.read(cr, uid, changed_ids, fields=['prod_ingredient_ids'], context=context)
-        for row in datas:
-            ids.extend(row['prod_ingredient_ids'])
-        return ids
+    def _get_qty_update_ids(self, cr, uid, changed_product_ids, context=None):
+        #
+        # find the formulas with the changed-qty ingredients, and return the ids
+        # of the products that are built with those formulas
+        #
+        if isinstance(changed_product_ids, (int, long)):
+            changed_product_ids = [changed_product_ids]
+        fnx_pd_product_ingredient = self.pool.get('fnx.pd.product.ingredient')
+        ingredients = fnx_pd_product_ingredient.read(
+                cr, SUPERUSER_ID,
+                [('item_id','in',changed_product_ids)],
+                fields=['id','formula_id'],
+                context=context
+                )
+        formulae_ids = [ingred.formula_id[0] for ingred in ingredients]
+        product_ids = self.search(
+                cr, SUPERUSER_ID,
+                [('fnx_pd_formula_id','in',formulae_ids)],
+                context=context
+                )
+        return product_ids
+
+    def _get_formula_update_ids(product_formula, cr, uid, changed_formula_ids, context=None):
+        #
+        # find the products effected by the change in formula name
+        #
+        if isinstance(changed_formula_ids, (int, long)):
+            changed_formula_ids = [changed_formula_ids]
+        self = product_formula.pool.get('product.product')
+        formulae_names = [
+                formula['name']
+                for formula in product_formula.read(
+                    cr, SUPERUSER_ID,
+                    changed_formula_ids,
+                    fields=['id','name'],
+                    context=context,
+                )]
+        product_ids = self.search(
+                cr, SUPERUSER_ID,
+                [('module','=','F135'),('xml_id','in',formulae_names)],
+                context=context
+                )
+        return product_ids
+
+    def _get_item_formula(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        product_map = dict([
+            (p['xml_id'], p['id'])
+            for p in self.read(cr, SUPERUSER_ID, ids, fields=['xml_id'], context=context)
+            ])
+        formulae_map = dict([
+            (f['name'], f['id'])
+            for f in self.pool.get('fnx.pd.product.formula').read(cr, SUPERUSER_ID, [('name','in',product_map.keys())], context=context)
+            ])
+        for product_name, product_id in product_map.items():
+            res[product_id] = formulae_map.get(product_name, False)
+        return res
 
     _columns = {
         'prod_order_ids': fields.one2many(
@@ -54,7 +104,41 @@ class product_product(osv.Model):
             string='Immediately Producible',
             help="How much can be made with current inventory.",
             store={
-                'product.product': ( _get_qty_update_ids, ['fis_qty_available'], 10,),
+                'product.product': (_get_qty_update_ids, ['fis_qty_available'], 10,),
                 },
+            ),
+        'fnx_pd_formula_id': fields.function(
+            _get_item_formula,
+            type='many2one',
+            relation='fnx.pd.product.formula',
+            string='Formula Link',
+            store={
+                'fnx.pd.product.formula': (_get_formula_update_ids, ['name'], 10,),
+                },
+            ),
+        'fnx_pd_formula_name': fields.related(
+            'fnx_pd_formula_id', 'formula',
+            string='Formula',
+            type='char',
+            size=14,
+            ),
+        'fnx_pd_formula_coating': fields.related(
+            'fnx_pd_formula_id', 'coating',
+            string='Coating',
+            type='char',
+            size=10,
+            ),
+        'fnx_pd_formula_allergens': fields.related(
+            'fnx_pd_formula_id', 'allergens',
+            string='Allergens',
+            type='char',
+            size=10,
+            ),
+        'fnx_pd_formula_ingredient_ids': fields.related(
+            'fnx_pd_formula_id', 'ingredient_ids',
+            string='Formula Ingredients',
+            type='one2many',
+            relation='fnx.pd.product.ingredient',
+            fields_id='formula_id',
             ),
         }

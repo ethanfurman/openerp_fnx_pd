@@ -26,47 +26,41 @@ from traceback import format_exception
 SOURCE = Path('/var/fis/production/')
 ARCHIVE = Path('/var/openerp/archive/production/')
 ERRORS = Path('/var/openerp/archive/production/error')
-USER_PW_DB = Path('%s/config/credentials' % os.environ['VIRTUAL_ENV'])
+CONFIG = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], section='openerp')
 
-# dummy values to be filled in by USER_PW_DB
-
-DB = USER = PW = None
-execfile(USER_PW_DB)
 
 # API
 
 @Command(
-        values=('settings to use', ),
-        hostname=('host where OpenERP instance is running', ),
-        db=('database to use', ),
-        login=('login name to use', ),
-        password=('password for login name', ),
+        table=Spec('which table to update', REQUIRED, choices=['product','production']),
+        ids=Spec('ids of records to change', REQUIRED),
+        values=Spec('settings to use', REQUIRED),
         )
-def manual_update(hostname='localhost', db=DB, login=USER, password=None, **values):
-    if password is None:
-        password = PW
-    OE = connect(hostname, db, login, password)
-    OE
-    pass
+def manual_update(table, ids, **values):
+    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    ids = [int(i) for i in ids.replace(',',' ').split()]
+    for key, value in values.items():
+        for t in (int, float):
+            try:
+                value = t(value)
+                break
+            except ValueError:
+                pass
+    table = OE.conn.get_model({'product':'product.product', 'production':'fnx_pd.production'}[table])
+    table.write(ids, values)
 
 @Command(
         file_to_process=('order to add/update in system', ),
         order=('specific order number from file to process', ),
-        hostname=('host where OpenERP instance is running', ),
-        db=('database to use', ),
-        login=('login name to use', ),
-        password=('password for login name', ),
         dryrun=('do not update tables', FLAG),
         )
-def process(file_to_process='', order='', hostname='localhost', db=DB, login=USER, password=None, dryrun=False):
+def process(file_to_process='', order='', dryrun=False):
     "imports a production spreadsheet into FnxPd"
-    if password is None:
-        password = PW
     if file_to_process:
         files = [file_to_process]
     else:
         files = [f for f in get_files() if f.ext == '.xls']
-    OE = connect(hostname, db, login, password)
+    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
@@ -87,7 +81,7 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
             imported_orders, errors = import_spreadsheet(OE, file, order or None, dryrun=dryrun)
             check_open_orders(OE, dryrun=dryrun)
             if errors:
-                if db.startswith('test') or dryrun:
+                if CONFIG.db.startswith('test') or dryrun:
                     # do not send mail from test machines nor during dry runs
                     abort('errors during processing')
                 [fnxpd_manager] = get_records(
@@ -128,17 +122,11 @@ def process(file_to_process='', order='', hostname='localhost', db=DB, login=USE
         raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
 
 @Command(
-        hostname=('host where OpenERP instance is running', ),
-        db=('database to use', ),
-        login=('login name to use', ),
-        password=('password for login name', ),
         dryrun=('do not update tables', FLAG),
         )
-def open_orders(hostname='localhost', db=DB, login=USER, password=None, dryrun=False):
+def open_orders(dryrun=False):
     "check open orders and close if necessary"
-    if password is None:
-        password = PW
-    OE = connect(hostname, db, login, password)
+    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     check_open_orders(OE, dryrun=dryrun)
 

@@ -8,3 +8,5 @@ access_fnx_pd_ingredient_all,User,model_fnx_pd_ingredient,base.group_user,1,0,0,
 access_fnx_pd_ingredient_manager,FnxPd Manager,model_fnx_pd_ingredient,group_fnx_pd_manager,1,1,1,1
 access_fnx_pd_multiline,access_fnx_pd_multiline,model_fnx_pd_multiline,group_fnx_pd_user,1,1,1,1
 access_fnx_pd_multiline.entry,access_fnx_pd_multiline_entry,model_fnx_pd_multiline_entry,group_fnx_pd_user,1,1,1,1
+access_fnx_pd_product_formula,access_fnx_pd_product_formula,model_fnx_pd_product_formula,group_fnx_pd_manager,1,0,0,0
+access_fnx_pd_product_ingredient,access_fnx_pd_product_ingredient,model_fnx_pd_product_ingredient,group_fnx_pd_manager,1,0,0,0

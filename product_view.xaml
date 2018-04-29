@@ -10,21 +10,32 @@
             @priority eval='7'
             @arch type='xml'
                 ~xpath expr="//group[@name='inventory']" position='after'
-                    ~group string='Production Orders' groups='fnx_pd.group_fnx_pd_guest'
-                        @prod_order_ids colspan='4' nolabel='1' readonly='1'
-                            ~tree default_order='order_schedule_date'
-                                @order_no
-                                @schedule_date
-                                @line_id
-                                @allergens
-                                @coating
-                                @state
-                    ~group string='Ingredient For' groups='fnx_pd.group_fnx_pd_guest'
-                        @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
-                            ~tree default_order='order_schedule_date'
-                                @order_no
-                                @order_product
-                                @qty_needed_desc
-                                @confirmed
-                                @order_state
-                                @order_schedule_date
+                    ~notebook
+                        ~page string='Production Orders' groups='fnx_pd.group_fnx_pd_guest'
+                            @prod_order_ids colspan='4' nolabel='1' readonly='1'
+                                ~tree default_order='order_schedule_date'
+                                    @order_no
+                                    @schedule_date
+                                    @line_id
+                                    @allergens
+                                    @coating
+                                    @state
+                        ~page string='Ingredient For' groups='fnx_pd.group_fnx_pd_guest'
+                            @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
+                                ~tree default_order='order_schedule_date'
+                                    @order_no
+                                    @order_product
+                                    @qty_needed_desc
+                                    @confirmed
+                                    @order_state
+                                    @order_schedule_date
+                        ~page string='Formula' groups='fnx_pd.group_fnx_pd_manager'
+                            ~group
+                                @fnx_pd_formula_name
+                                @fnx_pd_formula_coating
+                                @fnx_pd_formula_allergens
+                            @fnx_pd_formula_ingredient_ids colspan='4' nolabel='1' readonly='1'
+                                ~tree
+                                    @item_id
+                                    @qty_needed_desc
+                                    @qty_avail
