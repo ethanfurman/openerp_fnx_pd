@@ -9,7 +9,7 @@ from antipathy import Path
 from dbf import Date, Time, DateTime
 from collections import defaultdict
 from openerplib import AttrDict, get_connection, get_records, Many2One
-from openerplib.dates import datetime_to_str, local_to_utc
+from openerplib.dates import date_to_str, datetime_to_str, local_to_utc
 from pandaemonium import PidLockFile
 from pytz import timezone
 from tools import FISenum, combine_by_value, Model, compare_fis_records as get_changed_fis_records
@@ -82,9 +82,10 @@ def main(dryrun, list_records, raise_on_exception):
             ),
         delete=Spec('delete records [default: send email]', FLAG,),
         )
-def production(method, delete, *files):
+def fnx_pd(method, delete, *files):
     global DELETE, oe_products, oe_production_lines
     DELETE = delete
+    files = [f.lower() for f in files]
     print('attempting a %s compare' % method)
     try:
         with PidLockFile('/var/run/fnx_pd_update.pid'):
@@ -117,7 +118,7 @@ def production(method, delete, *files):
             #
             if 'ifpp' in files:
                 handle_production_order(method)
-                # handle_production_detail(method)
+                handle_production_detail(method)
                 files = tuple([f for f in files if f != 'ifpp'])
             if 'ifms' in files:
                 handle_product_formula(method)
@@ -125,9 +126,8 @@ def production(method, delete, *files):
             if 'ifdt' in files:
                 handle_product_ingredient(method)
                 files = tuple([f for f in files if f != 'ifdt'])
-            # DO NOT COMMIT
-            # if method == 'full':
-            #     handle_qall(*files)
+            if method == 'full':
+                handle_qall(*files)
     finally:
         for m, problems in sorted(Model.errors.items()):
             error('\n', m, border=('lined', '='), sep='')
@@ -1164,8 +1164,6 @@ def handle_qall(*files):
             # if order_id:
             #     order.id = order_id
             #     all_oe_records[order_no] = order
-    if script_verbosity > 1:
-        get_response('press <Enter> when ready...', validate=lambda a: True)
     #
     # process changes
     #
@@ -1189,8 +1187,6 @@ def handle_qall(*files):
             echo('\n'.join(body), border='box' if script_verbosity > 1 else None)
         if not DRYRUN:
             product_orders.write('|'.join(order_nos), oe_ids, values, context={})
-    if script_verbosity > 1:
-        get_response('press <Enter> when ready...', validate=lambda a: True)
     #
     # deleted/deactivate orders
     #
@@ -1211,8 +1207,6 @@ def handle_qall(*files):
                         echo('  QALL:%-10s  %s' % (order_no, rec.item_id.name))
                 if not DRYRUN:
                     product_orders.delete(ids, context=context)
-    if script_verbosity > 1:
-        get_response('press <Enter> when ready...', validate=lambda a: True)
     #
     print('%d orders changed\n%d orders added\n%d orders removed'
             % (changed_count, added_count, deleted_count, ),
@@ -1290,7 +1284,7 @@ def convert_ifpp0_rec(fis_rec):
     order.line_id_set = False
     sched_date = fix_date(fis_rec[F328.prod_sched_date], 'ymd') or False
     if sched_date:
-        sched_date = datetime_to_str(local_to_utc(DateTime.combine(sched_date, Time(5))))
+        sched_date = date_to_str(sched_date)
     order.schedule_date = sched_date
     order.schedule_date_set = False
     fin_date = fix_date(fis_rec[F328.prod_date], 'mdy') or False
