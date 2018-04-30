@@ -406,7 +406,7 @@ class fnx_pd_product_ingredient(osv.Model):
             string='Qty Needed (with units)',
             type='char',
             store={
-                'fnx.pd.ingredient': (lambda t, c, u, ids, ctx: ids, ['qty_needed', 'qty_desc'], 10),
+                'fnx.pd.product.ingredient': (lambda t, c, u, ids, ctx: ids, ['qty_needed', 'qty_desc'], 10),
                 },
             ),
         'qty_avail': fields.related(
