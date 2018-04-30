@@ -1054,7 +1054,7 @@ def handle_qall(*files):
         # see if today's qall file exists
         qall_files = sorted(config.network.qall_files.glob(today.strftime('%Y-%m-%d_*')))
         if qall_files:
-            qall = files[-1]
+            qall = qall_files[-1]
         else:
             echo(today.strftime('no QALL file found for %Y-%m-%d'), border='box')
             return
