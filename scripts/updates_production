@@ -1052,7 +1052,7 @@ def handle_qall(*files):
         [qall] = files
     else:
         # see if today's qall file exists
-        qall_files = sorted(config.network.qall_files.glob(today.strftime('%Y-%M-%d_*')))
+        qall_files = sorted(config.network.qall_files.glob(today.strftime('%Y-%m-%d_*')))
         if qall_files:
             qall = files[-1]
         else:
