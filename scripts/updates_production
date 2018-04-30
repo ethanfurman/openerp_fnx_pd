@@ -1058,7 +1058,6 @@ def handle_qall(*files):
         else:
             echo(today.strftime('no QALL file found for %Y-%m-%d'), border='box')
             return
-    qall = (files or [config.network.qall_file])[0]
     product_orders = Model(oe.get_model('fnx.pd.order'), 'nvty', 'F135', context, RAISE_ON_EXCEPTION)
     # variables used
     added_records = {}
