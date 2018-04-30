@@ -866,7 +866,7 @@ def handle_production_detail(method):
         def ignore_order_detail(rec):
             if rec[F329.item_type_batch_1] == 'M':
                 return True
-            order_no = rec[F329.order_no] 
+            order_no = rec[F329.order_no]
             if order_no not in oe_orders:
                 return False
             if oe_orders[order_no].state in ['complete','cancelled']:
@@ -1046,6 +1046,18 @@ def handle_qall(*files):
     context = {'fis-updates': True, 'active_test': False}
     if len(files) > 1:
         abort('only one file can be specified (%r)' % (files, ))
+    today = Date.today()
+    cutoff = FederalHoliday.next_business_day(today, 15)
+    if files:
+        [qall] = files
+    else:
+        # see if today's qall file exists
+        qall_files = sorted(config.network.qall.glob(today.strftime('%Y-%M-%d_*')))
+        if qall_files:
+            qall = files[-1]
+        else:
+            echo(today.strftime('no QALL file found for %Y-%m-%d'), border='box')
+            return
     qall = (files or [config.network.qall_file])[0]
     product_orders = Model(oe.get_model('fnx.pd.order'), 'nvty', 'F135', context, RAISE_ON_EXCEPTION)
     # variables used
@@ -1083,8 +1095,6 @@ def handle_qall(*files):
     #   - P, N, or Space --> no change
     #   - anything else --> no change, and record invalid state
     #
-    today = Date.today()
-    cutoff = FederalHoliday.next_business_day(today, 15)
     # trim any FIS orders that fail the first two criteria
     for order_no, order in list(fis_orders.items()):
         if order.day is Weekday.SATURDAY:
@@ -1394,7 +1404,6 @@ def split_steps(order):
             order_step.line_id = line_step
             orders[num_step] = order_step
     return orders
-    
 
 
 # schemas
