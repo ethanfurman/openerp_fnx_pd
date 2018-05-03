@@ -29,7 +29,7 @@ class fnx_pd_ingredient(osv.Model):
         return res
 
     _columns = {
-        'name': fields.char('Name', size=13, required=True),  # 'order:item'  (6:6)
+        'name': fields.char('Name', size=19, required=True),  # 'order:item'  (12:6)  (+6 due to order_step_total)
         'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade', required=True),
         'order_no': fields.related(
             'order_id', 'order_no',
