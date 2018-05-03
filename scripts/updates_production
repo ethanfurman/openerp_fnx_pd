@@ -69,6 +69,7 @@ def main(dryrun, list_records, raise_on_exception):
     RAISE_ON_EXCEPTION = raise_on_exception
     VIEW_TYPE = 'none' if LIST_RECORDS else 'percent'
     BORDER = 'box' if LIST_RECORDS and script_verbosity > 1 else None
+    echo('RAISE_ON_EXCEPTION --> ', RAISE_ON_EXCEPTION, border='box')
 
 @Command(
         files=Spec('old and now files (separated by a comma)', ),
@@ -83,7 +84,9 @@ def main(dryrun, list_records, raise_on_exception):
         delete=Spec('delete records [default: send email]', FLAG,),
         )
 def fnx_pd(method, delete, *files):
-    global DELETE, oe_products, oe_production_lines
+    global DELETE, oe_products, oe_production_lines, today, cutoff
+    today = Date.today()
+    cutoff = FederalHoliday.next_business_day(today, 15)
     DELETE = delete
     files = [f.lower() for f in files]
     print('attempting a %s compare' % method)
@@ -118,7 +121,7 @@ def fnx_pd(method, delete, *files):
             #
             if 'ifpp' in files:
                 handle_production_order(method)
-                handle_production_detail(method)
+                # handle_production_detail(method)
                 files = tuple([f for f in files if f != 'ifpp'])
             if 'ifms' in files:
                 handle_product_formula(method)
@@ -163,8 +166,6 @@ def diff(old, new, order):
         print('changes in order: %s' % order_no)
         for field in ('user','dept','line','item','desc','conf','qty','date','day','coating','allergens'):
             if old_order[field] != new_order[field]:
-            #     print('   %s:  %-50r' % (field, old_order[field]))
-            # else:
                 print('   %s:  %-50s  -->  %s' % (field, old_order[field], new_order[field]))
     print('total orders: %r\ndeleted orders: %r\nnew orders: %r\nchanged orders: %r'
             % (i, dead_orders, new_orders, changed_orders), border='box')
@@ -197,15 +198,7 @@ def handle_product_formula(method):
     # - full -> current OpenERP data
     #
     print('gathering data')
-    # ifpp0 = fisData(328, keymatch='10%s')
-    # ifpp1 = fisData(329, keymatch='10%s')
-    # ifdt = fisData(322, keymatch='10%s')
-    # ifdt1 = fisData(323, keymatch='10%s')
     ifms = fisData(320, keymatch='10%s')
-    # print(ifpp0.filename, verbose=2)
-    # print(ifpp1.filename, verbose=2)
-    # print(ifdt.filename, verbose=2)
-    # print(ifdt1.filename, verbose=2)
     print('%s:  %d records' % (ifms.filename, len(ifms)), verbose=2)
     if method == 'quick':
         #
@@ -390,10 +383,6 @@ def handle_product_ingredient(method):
     # - full -> current OpenERP data
     #
     print('gathering data')
-    # ifpp0 = fisData(328, keymatch='10%s')
-    # ifpp1 = fisData(329, keymatch='10%s')
-    # ifdt = fisData(322, keymatch='10%s')
-    # ifdt1 = fisData(323, keymatch='10%s')
     formulae = dict([
         (f.formula, Many2One(f.id, f.formula))
         for f in get_records(oe, 'fnx.pd.product.formula', fields=['id','formula'])
@@ -403,10 +392,6 @@ def handle_product_ingredient(method):
         for i in get_records(oe, 'product.product', fields=['id','xml_id'], domain=[('module','=','F135')])
         ])
     ifdt = fisData(322, keymatch='10%s')
-    # print(ifpp0.filename, verbose=2)
-    # print(ifpp1.filename, verbose=2)
-    # print(ifdt.filename, verbose=2)
-    # print(ifdt1.filename, verbose=2)
     print('%s:  %d records' % (ifdt.filename, len(ifdt)), verbose=2)
     if method == 'quick':
         #
@@ -423,7 +408,7 @@ def handle_product_ingredient(method):
                     F322.desc, F322.coating, F322.allergens,
                     ],
                 address_fields=[],
-                ignore=lambda r: ('%s-%s' % (r[F322.formula_id], r[F322.rev_id]) not in formulae
+                ignore=lambda r: ('%s-%s' % (r[F322.formula_id], r[F322.rev_no]) not in formulae
                                   or r[F322.ingr_id_batch_1] not in oe_items),
                 )
         #
@@ -476,7 +461,7 @@ def handle_product_ingredient(method):
         #
         print('getting fis records')
         for fis_rec in ifdt.values():
-            if '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_id]) not in formulae:
+            if '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no]) not in formulae:
                 continue
             if fis_rec[F322.ingr_id_batch_1] not in oe_items:
                 continue
@@ -595,6 +580,7 @@ def handle_product_ingredient(method):
 
 def handle_production_order(method):
     global ifms
+    cutoff_date = cutoff.strftime('%Y-%m-%d')
     print('processing production orders (IFPP0 - 328)', border=('flag', '#'))
     context = {'fis-updates': True, 'active_test': False}
     fnx_pd_order = Model(oe.get_model('fnx.pd.order'), 'ifpp0', 'F328', context, RAISE_ON_EXCEPTION)
@@ -620,15 +606,8 @@ def handle_production_order(method):
     #
     print('gathering data')
     ifpp0 = fisData(328, keymatch='10%s')
-    ifpp1 = fisData(329, keymatch='10%s')
-    ifdt = fisData(322, keymatch='10%s')
-    ifdt1 = fisData(323, keymatch='10%s')
     ifms = fisData(320, keymatch='10%s')
     print(ifpp0.filename, verbose=2)
-    print(ifpp1.filename, verbose=2)
-    print(ifdt.filename, verbose=2)
-    print(ifdt1.filename, verbose=2)
-    print(ifms.filename, verbose=2)
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
@@ -684,6 +663,22 @@ def handle_production_order(method):
                         new_changed_order_records[order_no] = new_order
             assert set(old_changed_order_records.keys()) == set(new_changed_order_records.keys()),\
                     "old and new order records mismatch"
+        all_oe_records = dict([
+            (r.order_no, r)
+            for r in fnx_pd_order.read(
+                domain=[
+                    ('order_no','in',
+                        added_order_records.keys()
+                        + deleted_records.keys()
+                        + old_changed_order_records.keys()
+                        ),
+                    ],
+                fields=[
+                    'id', 'order_no', 'completed_fis_qty', 'confirmed', 'item_id',
+                    'formula_code', 'dept', 'line_id', 'schedule_date', 'finish_date',
+                    'completed_fis_qty', 'line_id_set', 'schedule_date_set', 'state',
+                    ],
+                )])
     elif method == 'full':
         #
         # for a full compare we fully convert the fis records, the compare against all open
@@ -729,18 +724,9 @@ def handle_production_order(method):
                 if old_order.state not in ('complete', 'cancelled'):
                     deleted_records[order_no] = old_order
                 continue
-            # now normalize records for good comparison
-            new_order.id = old_order.id
-            new_order.state = old_order.state
-            if old_order.line_id_set:
-                new_order.line_id_set = True
-                new_order.line_id = old_order.line_id
-            if old_order.schedule_date_set:
-                new_order.schedule_date_set = True
-                new_order.schedule_date = old_order.schedule_date
-            if old_order != new_order:
-                old_changed_order_records[order_no] = old_order
-                new_changed_order_records[order_no] = new_order
+            # save for later comparison
+            old_changed_order_records[order_no] = old_order
+            new_changed_order_records[order_no] = new_order
         assert set(old_changed_order_records.keys()) == set(new_changed_order_records.keys()),\
                 "old and new order records mismatch"
     else:
@@ -749,18 +735,76 @@ def handle_production_order(method):
     # at this point all records are in AttrDict format and divided by
     # new, deleted, and changed
     #
+    # process changes
+    #
+    print('%d records in changed' % len(old_changed_order_records), verbose=2)
+    for order_no, new_order in ProgressView(
+            iterable=new_changed_order_records.items(),
+            message='double-checking $total changes',
+            view_type=VIEW_TYPE
+        ):
+        # is order out of range?
+        if new_order.schedule_date > cutoff_date:
+            deleted_records[order_no] = new_order
+            del old_changed_order_records[order_no]
+            del new_changed_order_records[order_no]
+            continue
+        old_order = all_oe_records.get(order_no)
+        if old_order is None:
+            added_order_records[order_no] = new_order
+            del old_changed_order_records[order_no]
+            del new_changed_order_records[order_no]
+            continue
+        # now normalize records for good comparison
+        new_order.id = old_order.id
+        new_order.state = new_order.state or old_order.state
+        if old_order.line_id_set:
+            new_order.line_id_set = True
+            new_order.line_id = old_order.line_id
+        if old_order.schedule_date_set:
+            new_order.schedule_date_set = True
+            new_order.schedule_date = old_order.schedule_date
+        # and check for actionable changes
+        if new_order == old_order:
+            del old_changed_order_records[order_no]
+            del new_changed_order_records[order_no]
+            continue
+        else:
+            old_changed_order_records[order_no] = old_order
+    #
+    changed_map = combine_by_value(old_changed_order_records, new_changed_order_records)
+    print('%d groups in changed_map' % len(changed_map), verbose=2)
+    print('%d records in those groups' % sum([len(r) for r in changed_map.values()]), verbose=2)
+    for changes, records in ProgressView(
+            iterable=sorted(changed_map.items()),
+            message='processing changed records',
+            view_type=VIEW_TYPE,
+        ):
+        values = dict(changes)
+        order_nos = [r.order_no for r in records]
+        print('values: ', values, verbose=2)
+        print('order numbers: ', order_nos, verbose=2)
+        oe_ids = fnx_pd_order.search([('order_no','in',order_nos)])
+        changed_count += len(oe_ids)
+        if LIST_RECORDS:
+            body = []
+            for rec in records:
+                body.append(('  F135:%s' % (rec.order_no, )))
+            if script_verbosity > 1:
+                body.append('---')
+                body.append(str(AttrDict(changes)))
+            echo('\n'.join(body), border='box' if script_verbosity > 1 else None)
+        if not DRYRUN:
+            fnx_pd_order.write('|'.join(order_nos), oe_ids, values, context={})
     # process additions, checking first for already existing orders
     print('adding records')
     order_nos = added_order_records.keys()
-    existing_order_nos = [
-        o.order_no
-        for o in fnx_pd_order.read(
-                domain=[('order_no','in',order_nos)],
-                fields=['id','order_no'],
-                )]
+    existing_order_nos = [o.order_no for o in all_oe_records.values()]
     for order_no, order in added_order_records.items():
         if order_no in existing_order_nos:
             fnx_pd_order.error('FIS Order F328:%s already exists in OpenERP' % (order_no, ))
+            continue
+        if cutoff < order.schedule_date:
             continue
         added_count += 1
         if LIST_RECORDS:
@@ -774,42 +818,13 @@ def handle_production_order(method):
     #
     print('removing records')
     order_nos = deleted_records.keys()
-    echo('\n---\n'.join([str(v) for v in deleted_records.values()]), border='box')
-    orders = dict([
-        (o.id, o)
-        for o in fnx_pd_order.read(
-                domain=[('order_no','in',order_nos),('state','!=','complete')],
-                fields=['id','order_no'],
-                )])
+    orders = dict([(o.id, o) for o in all_oe_records.values() if o.order_no in deleted_records])
     if orders:
         deleted_count = len(orders)
         if LIST_RECORDS:
             echo('\n'.join(['  F328:%s' % o.order_no for o in orders.values()]))
         if not DRYRUN:
             fnx_pd_order.unlink(orders.keys())
-    #
-    # process changes
-    #
-    changed_map = combine_by_value(old_changed_order_records, new_changed_order_records)
-    for changes, records in ProgressView(
-            iterable=sorted(changed_map.items()),
-            message='processing changed records',
-            view_type=VIEW_TYPE,
-        ):
-        values = dict(changes)
-        order_nos = [r.order_no for r in records]
-        oe_ids = fnx_pd_order.search([('order_no','in',order_nos)])
-        changed_count += len(oe_ids)
-        if LIST_RECORDS:
-            body = []
-            for rec in records:
-                body.append(('  F135:%s' % (rec.order_no, )))
-            if script_verbosity > 1:
-                body.append('---')
-                body.append(str(AttrDict(changes)))
-            echo('\n'.join(body), border='box' if script_verbosity > 1 else None)
-        if not DRYRUN:
-            fnx_pd_order.write('|'.join(order_nos), oe_ids, values, context={})
     #
     print('%d orders changed\n%d orders added\n%d orders deleted'
             % (changed_count, added_count, deleted_count, ),
@@ -822,6 +837,9 @@ def handle_production_detail(method):
     fnx_pd_ingredient = Model(oe.get_model('fnx.pd.ingredient'), 'ifpp1', 'F329', context, RAISE_ON_EXCEPTION)
     all_oe_records = {}
     all_fis_records = {}
+    # all old and new records
+    old_ingredient_records = {}
+    new_ingredient_records = {}
     # these are for tracking old/new versions of changed records
     old_changed_ingredient_records = {}
     new_changed_ingredient_records = {}
@@ -838,24 +856,40 @@ def handle_production_detail(method):
     # - full -> current OpenERP data
     #
     print('gathering data')
-    # ifpp0 = fisData(328, keymatch='10%s')
-    # ifpp1 = fisData(329, keymatch='10%s')
-    # ifdt = fisData(329, keymatch='10%s')
-    # ifdt1 = fisData(323, keymatch='10%s')
     oe_orders = dict([
         (o.order_no, o)
         for o in get_records(oe, 'fnx.pd.order', fields=['id','order_no','state'])
         ])
+    print('%d orders found' % len(oe_orders), verbose=2)
+    oe_multi_orders = {}
+    for order_no, order in oe_orders.items():
+        if len(order_no) > 6:
+            oe_multi_orders.setdefault(order_no[:6], []).append(order)
+    for orders in oe_multi_orders.values():
+        for order in orders:
+            del oe_orders[order.order_no]
+    print('  single-line:  %6d' % len(oe_orders), verbose=2)
+    print('  multi-line:   %6d' % len(oe_multi_orders), verbose=2)
     oe_items = dict([
         (i.xml_id, Many2One(i.id, i.xml_id))
         for i in get_records(oe, 'product.product', fields=['id','xml_id'], domain=[('module','=','F135')])
         ])
+    print('%d items found' % len(oe_items), verbose=2)
     ifpp1 = fisData(329, keymatch='10%s')
-    # print(ifpp0.filename, verbose=2)
-    # print(ifpp1.filename, verbose=2)
-    # print(ifdt.filename, verbose=2)
-    # print(ifdt1.filename, verbose=2)
     print('%s:  %d records' % (ifpp1.filename, len(ifpp1)), verbose=2)
+    def ignore_order_detail(rec):
+        if rec[F329.item_type_batch_1] == 'M':
+            return True
+        order_no = rec[F329.order_no]
+        if order_no in oe_orders:
+            if oe_orders[order_no].state in ['complete','cancelled']:
+                return True
+        elif order_no in oe_multi_orders:
+            if all([order.state in ['complete','cancelled'] for order in oe_multi_orders[order_no]]):
+                return True
+        else:
+            return True
+        return False
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
@@ -863,15 +897,6 @@ def handle_production_detail(method):
         ifpp1_old = fisData(329, keymatch='10%s', data_path=config.network.fis_data_local_old_path)
         print('%s:  %d records' % (ifpp1_old.filename, len(ifpp1_old)), verbose=2)
         print('collecting changed records')
-        def ignore_order_detail(rec):
-            if rec[F329.item_type_batch_1] == 'M':
-                return True
-            order_no = rec[F329.order_no]
-            if order_no not in oe_orders:
-                return False
-            if oe_orders[order_no].state in ['complete','cancelled']:
-                return True
-            return False
         changes, added, deleted = get_changed_fis_records(
                 ifpp1_old.values(),
                 ifpp1.values(),
@@ -879,7 +904,8 @@ def handle_production_detail(method):
                     F329.order_no, F329.ingr_id_batch_1, F329.units_batch_1, F329.qty_batch_1
                     ],
                 address_fields=[],
-                ignore=ignore_order_detail
+                ignore=ignore_order_detail,
+                key=(F329.company_id, F329.order_no, F329.ingr_id_batch_1),
                 )
         #
         # and convert the new and deleted records
@@ -887,11 +913,41 @@ def handle_production_detail(method):
         print('sorting new and deleted records')
         for fis_rec in added:
             new_ingredient = convert_ifpp1_rec(fis_rec)
-            new_ingredient.item_id = oe_items[new_ingredient.item_id]
-            added_ingredient_records[new_ingredient.name] = new_ingredient
+            order_no = new_ingredient.order_id
+            if order_no in oe_orders:
+                new_ingredient.order_id = oe_orders[order_no].id
+                new_ingredient.item_id = oe_items[new_ingredient.item_id]
+                added_ingredient_records[new_ingredient.name] = new_ingredient
+                new_ingredient_records[new_ingredient.name] = new_ingredient
+            elif order_no in oe_multi_orders:
+                for order in oe_multi_orders[order_no]:
+                    if order.state not in ('complete', 'cancelled'):
+                        newer_ingredient = new_ingredient.copy()
+                        newer_ingredient.name = '%s:%s' % (order.order_no, new_ingredient.item_id)
+                        newer_ingredient.order_id = order.id
+                        newer_ingredient.item_id = oe_items[new_ingredient.item_id]
+                        added_ingredient_records[newer_ingredient.name] = newer_ingredient
+                        new_ingredient_records[newer_ingredient.name] = newer_ingredient
+
+            else:
+                fnx_pd_ingredient.error('F329:%s: unable to find in OpenERP' % order_no)
         for fis_rec in deleted:
             old_ingredient = convert_ifpp1_rec(fis_rec)
-            deleted_records[old_ingredient.name] = old_ingredient
+            order_no = old_ingredient.order_id
+            if order_no in oe_orders:
+                deleted_records[old_ingredient.name] = old_ingredient
+                old_ingredient_records[old_ingredient.name] = old_ingredient
+            elif order_no in oe_multi_orders:
+                for order in oe_multi_orders[order_no]:
+                    if order.state not in ('complete', 'cancelled'):
+                        older_ingredient = old_ingredient.copy()
+                        older_ingredient.name = '%s:%s' % (order.order_no, old_ingredient.item_id)
+                        older_ingredient.order_id = order.id
+                        older_ingredient.item_id = oe_items[old_ingredient.item_id]
+                        deleted_records[older_ingredient.name] = older_ingredient
+                        old_ingredient_records[older_ingredient.name] = older_ingredient
+            else:
+                fnx_pd_ingredient.error('F329:%s: unable to find in OpenERP' % order_no)
         for old, new, diffs in ProgressView(
                 iterable=changes,
                 message='sorting changed records',
@@ -902,14 +958,38 @@ def handle_production_detail(method):
             # changes at the FIS level don't always translate to changes at the OpenERP level
             if old_ingredient == new_ingredient:
                 continue
-            new_ingredient.item_id = oe_items[new_ingredient.item_id]
-            old_ingredient.item_id = oe_items[old_ingredient.item_id]
-            old_ingredient.order_id = oe_orders[old_ingredient.order_id].id
-            new_ingredient.order_id = oe_orders[new_ingredient.order_id].id
-            old_changed_ingredient_records[old_ingredient.name] = old_ingredient
-            new_changed_ingredient_records[new_ingredient.name] = new_ingredient
+            order_no = new_ingredient.order_id
+            if order_no in oe_orders:
+                new_ingredient.item_id = oe_items[new_ingredient.item_id]
+                old_ingredient.item_id = oe_items[old_ingredient.item_id]
+                old_ingredient.order_id = oe_orders[old_ingredient.order_id].id
+                new_ingredient.order_id = oe_orders[new_ingredient.order_id].id
+                old_changed_ingredient_records[old_ingredient.name] = old_ingredient
+                old_ingredient_records[old_ingredient.name] = old_ingredient
+                new_changed_ingredient_records[new_ingredient.name] = new_ingredient
+                new_ingredient_records[new_ingredient.name] = new_ingredient
+            elif order_no in oe_multi_orders:
+                for order in oe_multi_orders[order_no]:
+                    if order.state not in ('complete', 'cancelled'):
+                        older_ingredient = old_ingredient.copy()
+                        older_ingredient.name = '%s:%s' % (order.order_no, old_ingredient.item_id)
+                        older_ingredient.order_id = order.id
+                        older_ingredient.item_id = oe_items[old_ingredient.item_id]
+                        newer_ingredient = new_ingredient.copy()
+                        newer_ingredient.name = '%s:%s' % (order.order_no, new_ingredient.item_id)
+                        newer_ingredient.order_id = order.id
+                        newer_ingredient.item_id = oe_items[new_ingredient.item_id]
+                        old_changed_ingredient_records[older_ingredient.name] = older_ingredient
+                        old_ingredient_records[older_ingredient.name] = older_ingredient
+                        new_changed_ingredient_records[newer_ingredient.name] = newer_ingredient
+                        new_ingredient_records[newer_ingredient.name] = newer_ingredient
+            else:
+                fnx_pd_ingredient.error('F329:%s: unable to find in OpenERP' % order_no)
         assert set(old_changed_ingredient_records.keys()) == set(new_changed_ingredient_records.keys()),\
-                "old and new ingredient records mismatch"
+                "old and new ingredient records mismatch\n%r\%r" % (
+                        sorted(old_changed_ingredient_records),
+                        sorted(new_changed_ingredient_records),
+                        )
         all_oe_records = dict([
             (r.name, r)
             for r in fnx_pd_ingredient.read(
@@ -922,9 +1002,21 @@ def handle_production_detail(method):
                     'id', 'name', 'order_id', 'item_id', 'qty_needed', 'qty_desc',
                     ],
                 )])
-        # add id to old records
-        for old_ingredient in old_changed_ingredient_records.values():
-            old_ingredient.id = all_oe_records[old_ingredient.name].id
+        # update old records to OpenERP version;
+        # possibly move records to added category
+        for name, old_ingredient in old_changed_ingredient_records.items():
+            if name in all_oe_records:
+                old_changed_ingredient_records[name] = all_oe_records[name]
+                new_changed_ingredient_records[name].id = all_oe_records[name].id
+                continue
+            elif name in new_ingredient_records:
+                # record doesn't exist - add to added_ingredient_records and remove
+                # from [old|new]_changed_ingredient_records
+                added_ingredient_records[name] = new_ingredient_records[name]
+            else:
+                fnx_pd_ingredient('%s not found in OpenERP' % name)
+            del old_changed_ingredient_records[name]
+            del new_changed_ingredient_records[name]
     elif method == 'full':
         #
         # for a full compare we fully convert the fis records, then compare against all
@@ -934,16 +1026,14 @@ def handle_production_detail(method):
         #
         print('getting fis records')
         for fis_rec in ifpp1.values():
-            if '%s-%s' % (fis_rec[F329.order_no], fis_rec[F329.ingr_id_batch_1]) not in oe_orders:
-                continue
-            if fis_rec[F329.ingr_id_batch_1] not in oe_items:
+            if ignore_order_detail(fis_rec):
                 continue
             ingredient = convert_ifpp1_rec(fis_rec)
             all_fis_records[ingredient.name] = ingredient
         #
         # and then openerp
         #
-        print('getting openerp records')
+        print('\ngetting openerp records')
         all_oe_records = dict([
             (r.name, r)
             for r in fnx_pd_ingredient.read(
@@ -962,16 +1052,20 @@ def handle_production_detail(method):
             if new_ingredient is None:
                 deleted_records[name] = old_ingredient
                 continue
-            new_ingredient.order_id = oe_orders[new_ingredient.order_id]
-            new_ingredient.item_id = oe_items[new_ingredient.item_id]
+            order_id = oe_orders.get(new_ingredient.order_id)
+            if order_id is None:
+                continue
+            new_ingredient.order_id = order_id.id
+            item_id = oe_items.get(new_ingredient.item_id)
+            if item_id is None:
+                continue
+            new_ingredient.item_id = item_id.id
             if old_ingredient is None:
                 added_ingredient_records[name] = new_ingredient
                 continue
             # now normalize records for good comparison
             new_ingredient.id = old_ingredient.id
-            if old_ingredient == new_ingredient:
-                continue
-            else:
+            if old_ingredient != new_ingredient:
                 old_changed_ingredient_records[name] = old_ingredient
                 new_changed_ingredient_records[name] = new_ingredient
         assert set(old_changed_ingredient_records.keys()) == set(new_changed_ingredient_records.keys()),\
@@ -1046,8 +1140,6 @@ def handle_qall(*files):
     context = {'fis-updates': True, 'active_test': False}
     if len(files) > 1:
         abort('only one file can be specified (%r)' % (files, ))
-    today = Date.today()
-    cutoff = FederalHoliday.next_business_day(today, 15)
     if files:
         [qall] = files
     else:
@@ -1077,8 +1169,8 @@ def handle_qall(*files):
             domain=[('state','in',['draft','sequenced','released','running','stopped'])],
             fields=[
                 'state', 'order_no', 'item_id', 'ordered_qty', 'line_id', 'line_id_set', 'confirmed',
-                'schedule_date', 'schedule_date_set', #'sequence', 'start_date', 'finish_date',
-                'dept', 'coating', 'allergens', #'completed_fis_qty', 'formula_code',
+                'schedule_date', 'schedule_date_set',
+                'dept', 'coating', 'allergens',
                 ],
         ))
     #
@@ -1112,15 +1204,12 @@ def handle_qall(*files):
             domain=[('order_no','in',[ono for ono in fis_orders if ono not in oe_orders])],
             fields=[
                 'state', 'order_no', 'item_id', 'ordered_qty', 'line_id', 'line_id_set', 'confirmed',
-                'schedule_date', 'schedule_date_set', #'sequence', 'start_date', 'finish_date',
-                'dept', 'coating', 'allergens', #'completed_fis_qty', 'formula_code',
+                'schedule_date', 'schedule_date_set',
+                'dept', 'coating', 'allergens',
                 ],
             context={'active_test': False},
         ):
         oe_orders[order.order_no] = order
-    ## convert date
-    ## for order in oe_orders.values():
-    ##     order.schedule_date = Date.strptime(order.schedule_date, DEFAULT_SERVER_DATE_FORMAT)
     #
     # get a list of all keys, and figure out whats new, what's old, and what's changed
     #
@@ -1169,10 +1258,6 @@ def handle_qall(*files):
             echo()
         if not DRYRUN:
             product_orders.create(order_no, order)
-            # order_id = product_orders.create(order_no, order)
-            # if order_id:
-            #     order.id = order_id
-            #     all_oe_records[order_no] = order
     #
     # process changes
     #
@@ -1205,8 +1290,6 @@ def handle_qall(*files):
             view_type=VIEW_TYPE,
         ):
         ## get the ids of actually existing records
-        # order_nos = deleted_records.keys()
-        # ids = [rec.id for key, rec in all_oe_records.items() if key in order_nos]
         ids = [rec.id for key, rec in deleted_records.items()]
         if ids:
             deleted_count = len(ids)
@@ -1221,8 +1304,6 @@ def handle_qall(*files):
             % (changed_count, added_count, deleted_count, ),
             border='box',
             )
-
-
 
 def add_ac(fis_rec, oe_rec):
     "add allergens and coating to rec"
@@ -1241,10 +1322,10 @@ def convert_ifdt_rec(fis_rec):
     #   formula_id, item_id, qty_needed, qty_desc
     #
     # using:
-    #   F322.formula_id, F322.rev_id, F322.ingr_id_batch_1, F322.qty_batch_1, F322.units_batch_1
+    #   F322.formula_id, F322.rev_no, F322.ingr_id_batch_1, F322.qty_batch_1, F322.units_batch_1
     #
     ingredient = AttrDict()
-    ingredient.formula_id = formula = '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_id])
+    ingredient.formula_id = formula = '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no])
     ingredient.item_id = item = fis_rec[F322.ingr_id_batch_1]
     ingredient.name = '%s:%s' % (formula, item)
     ingredient.qty_needed = fis_rec[F322.qty_batch_1]
@@ -1282,8 +1363,15 @@ def convert_ifpp0_rec(fis_rec):
     #
     order = AttrDict()
     order.order_no = fis_rec[F328.order_no]
-    order.completed_fis_qty = fis_rec[F328.produced]
-    order.confirmed = (False, 'fis')[fis_rec[F328.produced] == 'Y']
+    order.completed_fis_qty = fis_rec[F328.units_produced]
+    status = fis_rec[F328.produced]
+    if status == 'Y':
+        order.state = 'complete'
+    elif status == 'X':
+        order.state = 'cancelled'
+    else:
+        order.state = False
+    order.confirmed = (False, 'fis')[fis_rec[F328.confirmed] == 'Y']
     order.item_id = oe_products[fis_rec[F328.prod_id]]
     order.formula_code = '[%s-%s] %s' % (
             fis_rec[F328.formula_id].strip(), fis_rec[F328.formula_rev], fis_rec[F328.label_name],
@@ -1469,7 +1557,7 @@ class F322(FISenum):
     """
     company_id                = 'An$(1,2)',    0       # Company Code
     formula_id                = 'An$(3,10)',   1       # Formula Code
-    rev_id                    = 'An$(15,3)',   3       # Revision Number
+    rev_no                    = 'An$(15,3)',   3       # Revision Number
     key_type                  = 'An$(18,1)',   4       # Key Group = "0"
     line_id                   = 'An$(19,3)',   5       # Line Number
     ingr_id_batch_1           = 'Bn$(1,8)',    6       # Ingredient Code - Batch 1
@@ -1487,7 +1575,7 @@ class F323(FISenum):
     """
     company_id     = 'An$(1,2)',   0    # Company Code
     formula_id     = 'An$(3,10)',  1    # Formula Code
-    rev_id         = 'An$(15,3)',  3    # Revision Number
+    rev_no         = 'An$(15,3)',  3    # Revision Number
     key_type       = 'An$(18,1)',  4    # Key Group = "1"
     batch_id       = 'An$(19,2)',  5    # Batch Id
     desc           = 'Bn$',        6    # Description
@@ -1541,16 +1629,5 @@ class F329(FISenum):
     desc                   = 'En$',       15   # Description (Item Or Msg)
     qty_batch_1            = 'B(1)',      23   # Quantity - Batch 1
     qty_committed_batch_1  = 'B(3)',      25   # Qty Committed - Batch 1
-
- # 320: IFMS-FORMULA MASTER FILE
- # 321: IFMSH-FORMULA MASTER - HISTORICAL
- # 322: IFDT-FORMULA DETAIL - INGREDIENT DETAIL
- # 323: IFDT1-FORMULA DETAIL - PRODUCTION INFO
- # 324: IFTX-FORMULA DETAIL - BATCHING DIRECTIONS
- # 325: IFMFH-MASTER FORMULA HEADER FILE
- # 326: IFMFD-MASTER FORMULA DETAIL FILE
- # 327: IFIW-INGREDIENT USAGE BY FORMULA XREF FILE
- # 328: IFPP0-SALES ORDER PRODUCTION PENDING - HEADER
- # 329: IFPP1-SALES ORDER PRODUCTION PENDING - DETAIL
 
 Main()
