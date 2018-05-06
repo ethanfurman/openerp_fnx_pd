@@ -38,7 +38,7 @@ class product_product(osv.Model):
                 fields=['id','formula_id'],
                 context=context
                 )
-        formulae_ids = [ingred.formula_id[0] for ingred in ingredients]
+        formulae_ids = [ingred['formula_id'][0] for ingred in ingredients]
         product_ids = self.search(
                 cr, SUPERUSER_ID,
                 [('fnx_pd_formula_id','in',formulae_ids)],
