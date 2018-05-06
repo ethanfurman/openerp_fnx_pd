@@ -405,7 +405,7 @@ def handle_product_ingredient(method):
                 ifdt.values(),
                 enum_schema=[
                     F322.formula_id, F322.rev_no,
-                    F322.desc, F322.coating, F322.allergens,
+                    F322.desc_batch_1, F322.coating, F322.allergens,
                     ],
                 address_fields=[],
                 ignore=lambda r: ('%s-%s' % (r[F322.formula_id], r[F322.rev_no]) not in formulae
