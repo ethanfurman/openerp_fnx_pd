@@ -20,8 +20,7 @@ class product_product(osv.Model):
             return res
         datas = self.read(cr, uid, ids, fields=['id', 'xml_id'], context=context)
         for row in datas:
-            values = res[row['id']] = {}
-            values['fis_qty_makeable'] = recipe.make_on_hand(row['xml_id'])
+            res[row['id']] = recipe.make_on_hand(row['xml_id'])
         return res
 
     def _get_qty_update_ids(self, cr, uid, changed_product_ids, context=None):
