@@ -579,6 +579,10 @@ def handle_product_ingredient(method):
             )
 
 def handle_production_order(method):
+    #
+    # to fix wrong names format
+    #   update fnx_pd_order set order_no = regexp_replace(order_no, '(\d*)_(\d_\d)', '\1-\2');
+    #
     global ifms
     cutoff_date = cutoff.strftime('%Y-%m-%d')
     print('processing production orders (IFPP0 - 328)', border=('flag', '#'))
@@ -1459,7 +1463,7 @@ def convert_spreadsheet(file_name):
                 # multiple steps: make a copy for each one
                 total = len(lines)
                 for i, line_step in enumerate(lines, start=1):
-                    num_step = "%s_%d_%d" % (id_num, i, total)
+                    num_step = "%s-%d_%d" % (id_num, i, total)
                     order_step = order.copy()
                     order_step.order_no = num_step
                     order_step.line_id = line_step
@@ -1485,7 +1489,7 @@ def split_steps(order):
         # multiple steps: make a copy for each one
         total = len(lines)
         for i, line_step in enumerate(lines, start=1):
-            num_step = "%s_%d_%d" % (order.order_no, i, total)
+            num_step = "%s-%d_%d" % (order.order_no, i, total)
             order_step = order.copy()
             order_step.order_no = num_step
             order_step.line_id = line_step
