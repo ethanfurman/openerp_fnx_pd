@@ -12,7 +12,7 @@ from openerplib import AttrDict, get_connection, get_records, Many2One
 from openerplib.dates import date_to_str, datetime_to_str, local_to_utc
 from pandaemonium import PidLockFile
 from pytz import timezone
-from tools import FISenum, combine_by_value, Model, compare_fis_records as get_changed_fis_records
+from tools import allow_exception, FISenum, combine_by_value, Model, compare_fis_records as get_changed_fis_records
 from VSS.BBxXlate.fisData import fisData
 from VSS.constants import Weekday
 from VSS.finance import FederalHoliday
@@ -119,18 +119,20 @@ def fnx_pd(method, delete, *files):
                     lines.append(Many2One(ml, line_ids[ml].name))
                 oe_production_lines[multiline.key] = lines
             #
-            if 'ifpp' in files:
-                handle_production_order(method)
-                # handle_production_detail(method)
-                files = tuple([f for f in files if f != 'ifpp'])
-            if 'ifms' in files:
-                handle_product_formula(method)
-                files = tuple([f for f in files if f != 'ifms'])
-            if 'ifdt' in files:
-                handle_product_ingredient(method)
-                files = tuple([f for f in files if f != 'ifdt'])
-            if method == 'full':
-                handle_qall(*files)
+            with allow_exception(Exception):
+                if 'ifpp' in files:
+                    handle_production_order(method)
+                    handle_production_detail(method)
+            with allow_exception(Exception):
+                if 'ifms' in files:
+                    handle_product_formula(method)
+            with allow_exception(Exception):
+                if 'ifdt' in files:
+                    handle_product_ingredient(method)
+            files = tuple([f for f in files if f not in ('ifpp', 'ifms', 'ifdt')])
+            with allow_exception(Exception):
+                if method == 'full':
+                    handle_qall(*files)
     finally:
         for m, problems in sorted(Model.errors.items()):
             error('\n', m, border=('lined', '='), sep='')
