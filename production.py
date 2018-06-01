@@ -179,15 +179,14 @@ class fnx_pd_order(osv.Model):
         return True
 
     def _unique_order_no(self, cr, uid, ids, _cache={}):
-        records = self.read(
-                cr, uid,
-                [('order_no','!=', 'CLEAN')],
-                fields=['order_no'],
-                )
-        if len(records) != len(set([r['order_no'] for r in records])):
-            return False
-        else:
-            return True
+        # get the order numbers of the ids given, then check if any other
+        # orders also have those order numbers
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        records = self.read(cr, uid, ids, fields=['order_no'])
+        order_nos = [rec['order_no'] for rec in records]
+        duplicates = self.search(cr, uid, [('order_no','in',order_nos),('id','!=',ids)])
+        return not duplicates
 
     _columns = {
         'state': fields.selection([

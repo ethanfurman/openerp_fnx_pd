@@ -12,6 +12,7 @@ from openerplib import AttrDict, get_connection, get_records, Many2One
 from openerplib.dates import date_to_str, datetime_to_str, local_to_utc
 from pandaemonium import PidLockFile
 from pytz import timezone
+from time import sleep
 from tools import allow_exception, FISenum, combine_by_value, Model, compare_fis_records as get_changed_fis_records
 from VSS.BBxXlate.fisData import fisData
 from VSS.constants import Weekday
@@ -69,7 +70,6 @@ def main(dryrun, list_records, raise_on_exception):
     RAISE_ON_EXCEPTION = raise_on_exception
     VIEW_TYPE = 'none' if LIST_RECORDS else 'percent'
     BORDER = 'box' if LIST_RECORDS and script_verbosity > 1 else None
-    echo('RAISE_ON_EXCEPTION --> ', RAISE_ON_EXCEPTION, border='box')
 
 @Command(
         files=Spec('old and now files (separated by a comma)', ),
@@ -132,6 +132,10 @@ def fnx_pd(method, delete, *files):
             files = tuple([f for f in files if f not in ('ifpp', 'ifms', 'ifdt')])
             with allow_exception(Exception):
                 if method == 'full':
+                    # do not run until 0545
+                    mark = Time(5, 45)
+                    while Time.now() < mark:
+                        sleep(60)
                     handle_qall(*files)
     finally:
         for m, problems in sorted(Model.errors.items()):
@@ -171,6 +175,93 @@ def diff(old, new, order):
                 print('   %s:  %-50s  -->  %s' % (field, old_order[field], new_order[field]))
     print('total orders: %r\ndeleted orders: %r\nnew orders: %r\nchanged orders: %r'
             % (i, dead_orders, new_orders, changed_orders), border='box')
+
+
+@Command(
+        purge=('remove found duplicates', FLAG),
+        )
+def duplicates(purge):
+    "find duplicate order numbers"
+    config = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], types={'_path': Path})
+    oe = config.openerp
+    oe = get_connection(hostname=oe.host, database=oe.db, login=oe.user, password=oe.pw)
+    fnx_pd_order = oe.get_model('fnx.pd.order')
+    all_orders = {}
+    for rec in get_records(
+            fnx_pd_order,
+            domain=[('order_no','!=','CLEAN')],
+            fields=['id', 'order_no', 'state', 'item_id', 'line_id', 'schedule_date'],
+        ):
+        all_orders.setdefault(rec.order_no, []).append(rec)
+    last_order = None
+    processed = set()
+    to_be_purged = set()
+    check_for_purge = dict()
+    for order_no, orders in sorted(all_orders.items()):
+        found_old = False
+        if len(order_no) > 6 and order_no[:6] not in processed:
+            processed.add(order_no[:6])
+            # check for old 6-digit order
+            old_order = all_orders.get(order_no[:6])
+            if old_order is not None:
+                found_old = True
+                [old_order] = old_order
+                to_be_purged.add(old_order.id)
+        if found_old:
+            if order_no[:6] != last_order:
+                echo()
+                last_order = order_no[:6]
+            echo('%s\n------------' % order_no[:6])
+            echo('   %-60s  %-30s  %10s  %s'
+                    % (old_order.item_id[1], old_order.line_id[1], old_order.schedule_date, old_order.state)
+                    )
+        if len(orders) < 2:
+            continue
+        if order_no[:6] != last_order:
+            echo()
+            last_order = order_no[:6]
+        echo('%s\n------------' % order_no)
+        for order in orders:
+            check_for_purge.setdefault(order_no, []).append(order)
+            echo('   %-60s  %-30s  %10s  %s'
+                    % (order.item_id[1], order.line_id[1], order.schedule_date, order.state)
+                    )
+    echo()
+    if purge:
+        # compare orders in check_for_purge against FIS tables to determine which to keep
+        # and which to delete
+        ifpp = fisData(328, subset='10%s')
+        line_ids = {}
+        oe_production_lines = {}
+        for line in get_records(
+                oe,
+                'fis_integration.production_line',
+                fields=['id','xml_id','name'],
+            ):
+            line_ids[line.id] = line
+            oe_production_lines[line.xml_id] = [Many2One(line.id, line.name)]
+        for multiline in get_records(
+                oe,
+                'fnx.pd.multiline',
+                fields=['key', 'line_ids'],
+            ):
+            lines = []
+            for ml in multiline.line_ids:
+                lines.append(Many2One(ml, line_ids[ml].name))
+            oe_production_lines[multiline.key] = lines
+        for oe_order_no, oe_orders in sorted(check_for_purge.items()):
+            fis_order_no = oe_order_no[:6]
+            [key_rec] = ifpp.get_subset(fis_order_no)
+            fis_order = key_rec[1]
+            multiline = oe_production_lines[fis_order[F328.prod_line]]
+            step = int(oe_order_no[7])
+            index = step - 1
+            correct_line = multiline[index]
+            for oe_order in oe_orders:
+                if oe_order.line_id != correct_line:
+                    to_be_purged.add(oe_order.id)
+        fnx_pd_order.unlink(tuple(to_be_purged))
+        echo('%d orders removed' % len(to_be_purged))
 
 
 # helpers
@@ -775,6 +866,7 @@ def handle_production_order(method):
             del new_changed_order_records[order_no]
             continue
         else:
+            # update old_changed_order_records in case method is 'quick'
             old_changed_order_records[order_no] = old_order
     #
     changed_map = combine_by_value(old_changed_order_records, new_changed_order_records)
