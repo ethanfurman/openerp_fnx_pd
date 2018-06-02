@@ -50,10 +50,10 @@ class fnx_pd_ingredient(osv.Model):
                 ('cancelled', 'Cancelled'),
                 ]),
         'order_product': fields.related(
-            'order_id', 'item_id', 'name',
+            'order_id', 'item_id',
             string='Product',
-            type='char',
-            size=64,
+            type='many2one',
+            obj='product.product'
             ),
         'order_schedule_date': fields.related(
             'order_id', 'schedule_date',

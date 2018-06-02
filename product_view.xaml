@@ -22,12 +22,24 @@
                                     @state
                         ~page string='Ingredient For' groups='fnx_pd.group_fnx_pd_guest'
                             @prod_ingredient_ids colspan='4' nolabel='1' readonly='1'
+                                ~form version='7.0'
+                                    ~group
+                                        ~group
+                                            @order_no
+                                            @order_product
+                                        ~group
+                                            @order_state
+                                            @confirmed
+                                            @order_schedule_date
+                                        ~group
+                                            @qty_needed_desc $Needed
+                                            @qty_avail $Available
                                 ~tree default_order='order_schedule_date'
                                     @order_no
                                     @order_product
-                                    @qty_needed_desc
-                                    @confirmed
-                                    @order_state
+                                    @qty_needed_desc $Needed
+                                    @confirmed $Reserved
+                                    @order_state $State
                                     @order_schedule_date
                         ~page string='Formula' groups='fnx_pd.group_fnx_pd_manager'
                             ~group
