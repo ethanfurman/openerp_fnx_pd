@@ -185,7 +185,11 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         records = self.read(cr, uid, ids, fields=['order_no'])
         order_nos = [rec['order_no'] for rec in records]
-        duplicates = self.search(cr, uid, [('order_no','in',order_nos),('id','!=',ids)])
+        try:
+            duplicates = self.search(cr, uid, [('order_no','in',order_nos),('id','not in',ids)])
+        except Exception:
+            _logger.error("failed with [('order_no','in',%r),('id','not in',%r)]" % (order_nos, ids))
+            raise
         return not duplicates
 
     _columns = {
@@ -295,8 +299,12 @@ class fnx_pd_order(osv.Model):
                 vals['line_id_set'] = True
             if not nightly and 'schedule_date' in vals and not final_record.schedule_date_set:
                 vals['schedule_date_set'] = True
-            if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
-                return False
+            try:
+                if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
+                    return False
+            except Exception:
+                _logger.error('failed trying to write id %s with %s', record.id, vals)
+                raise
         return True
 
     def pd_list_recall(self, cr, uid, ids, context=None):
