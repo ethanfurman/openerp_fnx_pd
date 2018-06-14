@@ -509,6 +509,8 @@ def handle_product_ingredient(method):
         print('sorting new and deleted records')
         for fis_rec in added:
             oe_rec = convert_ifdt_rec(fis_rec)
+            oe_rec.formula_id = formulae[oe_rec.formula_id]
+            oe_rec.item_id = oe_items[oe_rec.item_id]
             added_ingredient_records[oe_rec.name] = oe_rec
         for fis_rec in deleted:
             oe_rec = convert_ifdt_rec(fis_rec)
@@ -526,8 +528,8 @@ def handle_product_ingredient(method):
                 continue
             old_ingredient.formula_id = formulae[old_ingredient.formula_id]
             new_ingredient.formula_id = formulae[new_ingredient.formula_id]
-            old_ingredient.ingr_id_batch_1 = oe_items[old_ingredient.ingr_id_batch_1]
-            new_ingredient.ingr_id_batch_1 = oe_items[new_ingredient.ingr_id_batch_1]
+            old_ingredient.item_id = oe_items[old_ingredient.item_id]
+            new_ingredient.item_id = oe_items[new_ingredient.item_id]
             old_ingredient_records[name] = old_ingredient
             new_ingredient_records[name] = new_ingredient
         assert set(old_changed_ingredient_records.keys()) == set(new_changed_ingredient_records.keys()),\
