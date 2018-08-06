@@ -41,6 +41,12 @@ QAll_C = IntEnum(
 HEADER, EMAIL, DEPT, PROD_LINE, TYPE, ITEM_CODE, ITEM_DESC, \
     ORDER_NUM, CONFIRMED, QTY, DATE, DAY, COATING, ALLERGENS = QAll_C
 
+# TODO: implement EXTRA handling for
+#       - IFPP
+#       - IFMS
+#       - IFDT
+#       - QALL
+
 # API
 @Script(
         dryrun=Spec('do not make changes, only show what changes would be made', FLAG),
@@ -82,9 +88,11 @@ def main(dryrun, list_records, raise_on_exception):
             type=lambda m: m.lower(),
             ),
         delete=Spec('delete records [default: send email]', FLAG,),
+        extra=Spec('extra arguments', OPTION),
         )
-def fnx_pd(method, delete, *files):
-    global DELETE, oe_products, oe_production_lines, today, cutoff
+def fnx_pd(method, delete, *files, **extra):
+    global DELETE, EXTRA, oe_products, oe_production_lines, today, cutoff
+    EXTRA = extra
     today = Date.today()
     cutoff = FederalHoliday.next_business_day(today, 15)
     DELETE = delete
