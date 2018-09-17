@@ -12,11 +12,12 @@ from antipathy import Path
 from datetime import date
 from time import sleep, time
 from logging import getLogger, INFO, Formatter, handlers
+from os import environ
 
 logger = getLogger()
 logger.setLevel(INFO)
 _handler = handlers.RotatingFileHandler(
-        '/var/log/openerp/latest_file.log',
+        '%s/var/log/openerp/latest_file.log' % environ['VIRTUAL_ENV'],
         maxBytes=1024*1024*1024,
         backupCount=30,
         )

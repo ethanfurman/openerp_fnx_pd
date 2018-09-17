@@ -22,11 +22,11 @@ from VSS.xl import open_workbook
 from recipe import get_fis_data, get_order_ingredients, F320, F329
 from traceback import format_exception
 
-
-SOURCE = Path('/var/fis/production/')
-ARCHIVE = Path('/var/openerp/archive/production/')
-ERRORS = Path('/var/openerp/archive/production/error')
-CONFIG = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], section='openerp')
+VIRTUAL_ENV = os.environ['VIRTUAL_ENV']
+SOURCE = Path('%s/var/fis/production/' % VIRTUAL_ENV)
+ARCHIVE = Path('%s/var/openerp/archive/production/' % VIRTUAL_ENV)
+ERRORS = Path('%s/var/openerp/archive/production/error' % VIRTUAL_ENV)
+CONFIG = OrmFile('%s/config/fnx.ini' % VIRTUAL_ENV, section='openerp')
 
 
 # API
