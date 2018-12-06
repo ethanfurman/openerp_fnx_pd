@@ -31,3 +31,6 @@
             @comment: The user has override access.
             @implied_ids eval="[(4, ref('group_fnx_pd_user'))]"
             @users eval="[(4, ref('base.user_root'))]"
+
+        ~record model='res.users' id='fis_integration.user_fis_daemon'
+            @groups_id eval="[(4, ref('group_fnx_pd_manager'))]"
