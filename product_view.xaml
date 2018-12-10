@@ -51,3 +51,5 @@
                                     @item_id
                                     @qty_needed_desc
                                     @qty_avail
+                        ~page string='Nutrition' groups='fnx_pd.group_fnx_pd_manager'
+                            @fnx_pd_nutrition_files widget='html' readonly='1' options="{'no_embed': True}"
