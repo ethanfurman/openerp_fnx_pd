@@ -75,6 +75,7 @@ class fnx_pd_ingredient(osv.Model):
             'item_id', 'fis_qty_available',
             string='Qty Avail.',
             type='float',
+	    digits=(16,2),
             ),
         'confirmed': fields.related(
             'order_id', 'confirmed',
@@ -420,6 +421,7 @@ class fnx_pd_product_ingredient(osv.Model):
             'item_id', 'fis_qty_available',
             string='Qty Avail.',
             type='float',
+	    digits=(16,2),
             ),
         }
 

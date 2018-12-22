@@ -11,6 +11,7 @@ class product_product(osv.Model):
     _name = 'product.product'
     _inherit = 'product.product'
 
+
     def _calc_makeable(self, cr, uid, ids, field_name, args, context=None):
         # XXX should this use the by-order recipe method instead of the
         #     by-item recipe method?
@@ -101,6 +102,7 @@ class product_product(osv.Model):
         'fis_qty_makeable': fields.function(
             _calc_makeable,
             type='float',
+	    digits=(15,3),
             string='Immediately Producible',
             help="How much can be made with current inventory.",
             store={
