@@ -14,6 +14,7 @@
             'base',
             'fis_integration',
             'fnx',
+            'fnx_fs',
             'product',
         ],
     'data': [
