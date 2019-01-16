@@ -21,6 +21,7 @@ from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from recipe import get_fis_data, get_order_ingredients, F320, F329
 from traceback import format_exception
+from xmlrpclib import Fault
 
 VIRTUAL_ENV = os.environ['VIRTUAL_ENV']
 SOURCE = Path('%s/var/fis/production/' % VIRTUAL_ENV)
@@ -173,7 +174,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
     '''
     # production date, production line should not be updated from QALL once
     # they have been changed in OpenERP
-    global fis_f320, fis_f328
+    global fis_f320, fis_f328, order_ids
     get_fis_data()
     fis_f320 = fisData(320, keymatch='10%s  %s0')
     fis_f328 = fisData(328, keymatch='10%s000010000')
@@ -187,6 +188,12 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 'fis_integration.production_line',
                 fields=['id','xml_id'],
             ))
+    order_ids = dict(
+            (r.order_no, r) for r in get_records(
+                OE.conn,
+                'fnx.pd.order',
+                fields=['id', 'order_no'],
+                ))
     today = Date.today()
     # get current orders and construct a dict of (schedule_date, min(sequence))
     multilines = dict([(r.key, r.line_ids) for r in get_records(OE.conn, 'fnx.pd.multiline', fields=['key', 'line_ids'])])
@@ -239,7 +246,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 # or an alphabetic code representing a range of lines in a compound order
                 try:
                     line = fis_row[F328.prod_line]
-                    print('line is', line, verbose=2)
+                    print('    line is', line, verbose=2)
                     if line.isdigit():
                         # an error here causes us to default to line 98
                         prodline_id = '%02d' % int(fis_row[F328.prod_line])
@@ -261,16 +268,16 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     errors.append('<row %3d> order %s: no, or bad, product line <%r> (using 98)' % (i, order_num, line))
                     error(' ', errors[-1])
                     prodline_ids = ['98']
-                print('prodline_ids:', prodline_ids, verbose=2)
+                print('    prodline_ids:', prodline_ids, verbose=2)
                 steps = len(prodline_ids)
-                print('steps:', steps, verbose=2)
+                print('    steps:', steps, verbose=2)
                 for step, prodline in enumerate(prodline_ids, start=1):
                     data.line_id = line_ids[prodline].id
                     data.item_id = item
                     data.order_no = order_num
                     if steps > 1:
                         data.order_no += '-%d_%d' % (step, steps)
-                    print('data.order_no:', data.order_no, verbose=2)
+                    print('    data.order_no:', data.order_no, verbose=2)
                     data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
                     data.ordered_qty = fis_row[F328.qty_on_order]
                     try:
@@ -306,11 +313,14 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                             max_qty=1,
                             )
                     if current_records:
-                        print('  checking for changed fields', verbose=2)
+                        print('      checking for changed fields', verbose=2)
                         current_record = current_records[0]
                         if not dryrun:
                             update_formula(OE, order_num, data, errors)
                         for k in data.keys():
+                            if k == 'order_no':
+                                # TODO: remove this if once all orders have the order id attached
+                                continue
                             if k.endswith('_id'):
                                 if data[k] == current_record[k][0]:
                                     del data[k]
@@ -330,21 +340,25 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                                     continue
                             print('updating %s' % row[ORDER_NUM], verbose=2)
                             for key in data:
-                                if data[key] != current_record[key]:
+                                if key == 'order_no':
+                                    # TODO: remove this if once all orders have the order id attached
+                                    continue
+                                elif data[key] != current_record[key]:
                                     print('  %s: %r -> %r' % (key, current_record[key], data[key]), verbose=2)
                                 else:
                                     print('  oops, forgot to delete key', key)
                             if not dryrun:
+                                # data.order_id = order_ids[data.order_no].id
                                 OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
                     elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('skipping %s: Saturday schedule' % order_num, verbose=2)
                         continue
                     else:
                         if not dryrun:
+                            print('creating %s' % row[ORDER_NUM], 'with:\n', data, verbose=2)
+                            order_id = OE.fnx_pd_order.create(dict(data), context={'script': True})
+                            order_ids[data.order_no] = AttrDict(id=order_id)
                             update_formula(OE, order_num, data, errors)
-                        print('creating %s' % row[ORDER_NUM], 'with:\n', data, verbose=2)
-                        if not dryrun:
-                            OE.fnx_pd_order.create(dict(data), context={'script': True})
             except Exception:
                 lines = format_exception(*sys.exc_info())
                 error('skipping %s due to error:' % order_num)
@@ -423,33 +437,75 @@ def check_open_orders(OE, ignore=(), dryrun=False):
             print()
 
 def update_formula(OE, order_num, data, errors):
-    print('updating formula for', order_num)
+    print('        updating formula for', order_num)
+    print('          current data:', data)
     sales_header = fis_f328[order_num]
     # pad the formula to 10 chars
     formula_id_rev = '%-10s' % sales_header[F328.formula_id], sales_header[F328.formula_rev]
     formula_header = fis_f320[formula_id_rev]
-    # create the individual ingredients
+    # get currently existing ingredients
+    existing_ingredients = dict(
+            (r.name, r)
+            for r in get_records(
+                OE.fnx_pd_ingredient,
+                domain=[('order_no','=',order_num)],
+                fields=['id', 'name', 'order_id', 'item_id', 'qty_needed', 'qty_desc'],
+                ))
+    # assemble list of ingredients, creating any that are missing
     target_item, ingreds = get_order_ingredients(order_num, include_null=False)
+    print('           ingredients:', ingreds)
     ingreds_ids = []
     for item_xml_id, key, rec, _ in ingreds:
         if item_xml_id == target_item:
             continue
         item_id = OE.inventory.get(item_xml_id)
+        print('        item id: %r' % (item_id, ), verbose=2)
+        print('        item xml id: %r' % (item_xml_id, ), verbose=2)
         if item_id is None:
             try:
                 item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
             except IndexError:
+                print('item %r not found' % (item_iml_id, ), verbose=2)
                 errors.append('unable to find ingredient %r in order %s' % (item_xml_id, order_num))
                 OE.fnx_pd_ingredient.unlink(ingreds_ids)
                 ingreds_ids = []
                 break
         qty = rec[F329.qty_batch_1]
         um = rec[F329.units_batch_1]
-        ingreds_ids.append(OE.fnx_pd_ingredient.create({
-                'item_id':item_id,
-                'qty_needed':qty,
-                'qty_desc':um,
-                }))
+        name = '%s:%s' % (order_num, item_xml_id)
+        print('        name:', name, verbose=2)
+        ingred = existing_ingredients.get(name)
+        if ingred is None:
+            try:
+                ingreds_ids.append(OE.fnx_pd_ingredient.create({
+                    'name':name,
+                    'order_id':order_ids[order_num].id,
+                    'item_id':item_id,
+                    'qty_needed':qty,
+                    'qty_desc':um,
+                    }))
+            except Fault as exc:
+                error('error creating %r --> %s' % (name, exc.faultCode.replace('\n\n', ':  ')))
+                continue
+        else:
+            # check that the important bits match
+            ingredient = AttrDict()
+            if ingred.order_id.id != order_ids[order_num].id:
+                ingredient.order_id = order_ids[order_num].id
+            if ingred.item_id != item_id:
+                ingredient.item_id = item_id
+            if ingred.qty_needed != qty:
+                ingredient.qty_needed = qty
+            if ingred.qty_desc != um:
+                ingredient.qty_desc = um
+            if ingredient:
+                OE.fnx_pd_ingredient.write(ingred.id, dict(ingredient))
+            ingreds_ids.append(ingred.id)
+    remove_ingreds_ids = OE.fnx_pd_ingredient.search(
+            [('order_id','=',order_num),('id','not in',ingreds_ids)],
+            )
+    if remove_ingreds_ids:
+        OE.fnx_pd_ingredient.unlink(remove_ingreds_ids)
     if ingreds_ids:
         data.ingredient_ids = [(6, 0, ingreds_ids)]
     # add the formula details
