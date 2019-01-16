@@ -67,6 +67,7 @@ def process(file_to_process='', order='', dryrun=False):
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
+    print('getting inventory...')
     OE.inventory = dict([
         (r.xml_id, r.id)
         for r in get_records(
@@ -75,6 +76,7 @@ def process(file_to_process='', order='', dryrun=False):
                 fields=['id', 'xml_id'],
                 domain=[('module','=','F135')],
                 )])
+    print('getting orders...')
     OE.orders = dict([
         (r.order_no, r)
         for r in get_records(
@@ -82,6 +84,7 @@ def process(file_to_process='', order='', dryrun=False):
                 'fnx.pd.order',
                 fields=['id', 'order_no'],
                 )])
+    print('getting ingredients...')
     OE.ingredients = dict([
         (r.name, r)
         for r in get_records(
@@ -221,7 +224,10 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
         else:
             raise ValueError('Unable to find <21 Day Production Schedule> in %r' % file_name)
         last_row = None
-        for i, row in enumerate(sheet.rows(start_row=1), start=1):
+        rows = sheet.rows(start_row=1)
+        print('processing %d rows' % len(rows))
+        for i, row in enumerate(rows, start=1):
+            print('.', end='')
             try:
                 if row == last_row:
                     continue
