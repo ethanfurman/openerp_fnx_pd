@@ -323,15 +323,15 @@ def handle_product_formula(method):
         #
         print('sorting new and deleted records')
         for fis_rec in added:
-            added_formula_records[fis_rec.formula] = convert_ifms_rec(fis_rec)
+            added_formula_records[fis_rec[F320.formula_id]] = convert_ifms_rec(fis_rec)
         for fis_rec in deleted:
-            deleted_records[fis_rec.formula] = convert_ifms_rec(fis_rec)
+            deleted_records[fis_rec[F320.formula_id]] = convert_ifms_rec(fis_rec)
         for old, new, diffs in ProgressView(
                 iterable=changes,
                 message='sorting changed records',
                 view_type=VIEW_TYPE,
             ):
-            formula = old[F320.formula]
+            formula = old[F320.formula_id]
             old_formula = convert_ifms_rec(old)
             new_formula = convert_ifms_rec(new)
             # changes at the FIS level don't always translate to changes at the OpenERP level
@@ -891,7 +891,11 @@ def handle_production_order(method):
         order_nos = [r.order_no for r in records]
         print('values: ', values, verbose=2)
         print('order numbers: ', order_nos, verbose=2)
-        oe_ids = fnx_pd_order.search([('order_no','in',order_nos)])
+        oe_ids = dict([
+            (r.order_no, r)
+            for r in
+                fnx_pd_order.read(domain=[('order_no','in',order_nos)], fields=['id','order_no'])
+                ])
         changed_count += len(oe_ids)
         if LIST_RECORDS:
             body = []
@@ -902,7 +906,8 @@ def handle_production_order(method):
                 body.append(str(AttrDict(changes)))
             echo('\n'.join(body), border='box' if script_verbosity > 1 else None)
         if not DRYRUN:
-            fnx_pd_order.write('|'.join(order_nos), oe_ids, values, context={})
+            for order_no in order_nos:
+                fnx_pd_order.write(order_no, oe_ids[order_no].id, values, context={})
     # process additions, checking first for already existing orders
     print('adding records')
     order_nos = added_order_records.keys()
