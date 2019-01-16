@@ -32,13 +32,15 @@ CONFIG = OrmFile('%s/config/fnx.ini' % VIRTUAL_ENV, section='openerp')
 
 # API
 
+global OE
+
 @Command(
         table=Spec('which table to update', REQUIRED, choices=['product','production']),
         ids=Spec('ids of records to change', REQUIRED),
         values=Spec('settings to use', REQUIRED),
         )
 def manual_update(table, ids, **values):
-    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
     ids = [int(i) for i in ids.replace(',',' ').split()]
     for key, value in values.items():
         for t in (int, float):
@@ -61,7 +63,7 @@ def process(file_to_process='', order='', dryrun=False):
         files = [file_to_process]
     else:
         files = [f for f in get_files() if f.ext == '.xls']
-    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
     OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
     OE.product = OE.conn.get_model('product.product')
@@ -73,63 +75,71 @@ def process(file_to_process='', order='', dryrun=False):
                 fields=['id', 'xml_id'],
                 domain=[('module','=','F135')],
                 )])
-    failed = []
-    for group in ((files, failed), ):
-        time.sleep(5)
-        trying, failing = group
-        for file in trying:
-            print('using file:', file)
-            imported_orders, errors = import_spreadsheet(OE, file, order or None, dryrun=dryrun)
-            check_open_orders(OE, dryrun=dryrun)
-            if errors:
-                if CONFIG.db.startswith('test') or dryrun:
-                    # do not send mail from test machines nor during dry runs
-                    abort('errors during processing')
-                [fnxpd_manager] = get_records(
-                        OE.conn,
-                        'ir.model.data',
-                        domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')],
+    OE.orders = dict([
+        (r.order_no, r)
+        for r in get_records(
+                OE.conn,
+                'fnx.pd.order',
+                fields=['id', 'order_no'],
+                )])
+    OE.ingredients = dict([
+        (r.name, r)
+        for r in get_records(
+                OE.conn,
+                'fnx.pd.ingredient',
+                fields=['id', 'name', 'order_id', 'order_no', 'item_id', 'qty_needed', 'qty_desc'],
+                )])
+    for file in files:
+        print('using file:', file)
+        imported_orders, errors = import_spreadsheet(file, order or None, dryrun=dryrun)
+        check_open_orders(dryrun=dryrun)
+        if errors:
+            if CONFIG.db.startswith('test') or dryrun:
+                # do not send mail from test machines nor during dry runs
+                abort('errors during processing')
+            [fnxpd_manager] = get_records(
+                    OE.conn,
+                    'ir.model.data',
+                    domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')],
+                    )
+            [fnxpd_manager_group] = get_records(
+                    OE.conn,
+                    'res.groups',
+                    domain=[('id','=',fnxpd_manager.res_id)],
+                    )
+            managers = get_records(
+                    OE.conn,
+                    'res.users',
+                    domain=[('id','in',fnxpd_manager_group.users)],
+                    fields=['id','login','email'],
+                    )
+            emails = [mgr.email for mgr in managers if mgr.id != 1 and mgr.email]
+            if emails:
+                print('-------', file=stderr)
+                print('sending to: ', ', '.join(emails), file=stderr)
+                mail_errors = mail(
+                    'mail.sunridgefarms.com',
+                    25,
+                    process_failure_mail % (
+                        ', '.join(emails),
+                        email.utils.formatdate(email.utils.mktime_tz(time.localtime()+(None,))),
+                        '\n'.join(errors),
                         )
-                [fnxpd_manager_group] = get_records(
-                        OE.conn,
-                        'res.groups',
-                        domain=[('id','=',fnxpd_manager.res_id)],
-                        )
-                managers = get_records(
-                        OE.conn,
-                        'res.users',
-                        domain=[('id','in',fnxpd_manager_group.users)],
-                        fields=['id','login','email'],
-                        )
-                emails = [mgr.email for mgr in managers if mgr.id != 1 and mgr.email]
-                if emails:
-                    print('-------', file=stderr)
-                    print('sending to: ', ', '.join(emails), file=stderr)
-                    mail_errors = mail(
-                        'mail.sunridgefarms.com',
-                        25,
-                        process_failure_mail % (
-                            ', '.join(emails),
-                            email.utils.formatdate(email.utils.mktime_tz(time.localtime()+(None,))),
-                            '\n'.join(errors),
-                            )
-                        )
-                    if mail_errors:
-                        print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
-                    raise SystemExit("errors during processing, mail attempted")
-                else:
-                    raise SystemExit("errors during processing")
-    if failed:
-        raise Exception("Unable to process orders:\n\t%s" % '\n\t'.join(failed))
+                    )
+                if mail_errors:
+                    print('unable to mail: ', mail_errors.items(), sep='\n   ', file=stderr)
+                raise SystemExit("errors during processing, mail attempted")
+            else:
+                raise SystemExit("errors during processing")
 
 @Command(
         dryrun=('do not update tables', FLAG),
         )
 def open_orders(dryrun=False):
     "check open orders and close if necessary"
-    OE = connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
     OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
-    check_open_orders(OE, dryrun=dryrun)
+    check_open_orders(dryrun=dryrun)
 
 # helpers
 
@@ -153,6 +163,7 @@ def archive(src_file, dest=ARCHIVE):
     shutil.move(src_file, dst_file)
 
 def connect(hostname, database, user, password):
+    global OE
     OE = AttrDict()
     print('connecting to %s:%s' % (hostname, database))
     OE.conn = get_connection(hostname=hostname, database=database, login=user, password=password)
@@ -168,13 +179,13 @@ def get_order(order):
     execfile(order, g)
     return AttrDict(g['order'])
 
-def import_spreadsheet(OE, file_name, only_order_no, dryrun):
+def import_spreadsheet(file_name, only_order_no, dryrun):
     '''
     add/update orders from spreadsheet; also add as-yet-unreferenced formulai
     '''
     # production date, production line should not be updated from QALL once
     # they have been changed in OpenERP
-    global fis_f320, fis_f328, order_ids
+    global fis_f320, fis_f328
     get_fis_data()
     fis_f320 = fisData(320, keymatch='10%s  %s0')
     fis_f328 = fisData(328, keymatch='10%s000010000')
@@ -188,12 +199,6 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                 'fis_integration.production_line',
                 fields=['id','xml_id'],
             ))
-    order_ids = dict(
-            (r.order_no, r) for r in get_records(
-                OE.conn,
-                'fnx.pd.order',
-                fields=['id', 'order_no'],
-                ))
     today = Date.today()
     # get current orders and construct a dict of (schedule_date, min(sequence))
     multilines = dict([(r.key, r.line_ids) for r in get_records(OE.conn, 'fnx.pd.multiline', fields=['key', 'line_ids'])])
@@ -306,17 +311,11 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                     else:
                         data.finish_date = False
                     imported_orders.append(data.order_no)
-                    current_records = get_records(
-                            OE.conn,
-                            'fnx.pd.order',
-                            domain=[('order_no','=',data.order_no)],
-                            max_qty=1,
-                            )
-                    if current_records:
+                    current_record = OE.orders.get(data.order_no)
+                    if current_record:
                         print('      checking for changed fields', verbose=2)
-                        current_record = current_records[0]
                         if not dryrun:
-                            update_formula(OE, order_num, data, errors)
+                            update_formula(order_num, data, errors)
                         for k in data.keys():
                             if k == 'order_no':
                                 # TODO: remove this if once all orders have the order id attached
@@ -348,7 +347,6 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                                 else:
                                     print('  oops, forgot to delete key', key)
                             if not dryrun:
-                                # data.order_id = order_ids[data.order_no].id
                                 OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
                     elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('skipping %s: Saturday schedule' % order_num, verbose=2)
@@ -357,8 +355,8 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
                         if not dryrun:
                             print('creating %s' % row[ORDER_NUM], 'with:\n', data, verbose=2)
                             order_id = OE.fnx_pd_order.create(dict(data), context={'script': True})
-                            order_ids[data.order_no] = AttrDict(id=order_id)
-                            update_formula(OE, order_num, data, errors)
+                            OE.orders[order_num] = AttrDict(id=order_id)
+                            update_formula(order_num, data, errors)
             except Exception:
                 lines = format_exception(*sys.exc_info())
                 error('skipping %s due to error:' % order_num)
@@ -366,7 +364,7 @@ def import_spreadsheet(OE, file_name, only_order_no, dryrun):
 
     return imported_orders, errors
 
-def check_open_orders(OE, ignore=(), dryrun=False):
+def check_open_orders(ignore=(), dryrun=False):
     global fis_f328
     fis_f328 = fisData(328, keymatch='10%s000010000')
     today = Date.today()
@@ -436,21 +434,13 @@ def check_open_orders(OE, ignore=(), dryrun=False):
         else:
             print()
 
-def update_formula(OE, order_num, data, errors):
+def update_formula(order_num, data, errors):
     print('        updating formula for', order_num)
     print('          current data:', data)
     sales_header = fis_f328[order_num]
     # pad the formula to 10 chars
     formula_id_rev = '%-10s' % sales_header[F328.formula_id], sales_header[F328.formula_rev]
     formula_header = fis_f320[formula_id_rev]
-    # get currently existing ingredients
-    existing_ingredients = dict(
-            (r.name, r)
-            for r in get_records(
-                OE.fnx_pd_ingredient,
-                domain=[('order_no','=',order_num)],
-                fields=['id', 'name', 'order_id', 'item_id', 'qty_needed', 'qty_desc'],
-                ))
     # assemble list of ingredients, creating any that are missing
     target_item, ingreds = get_order_ingredients(order_num, include_null=False)
     print('           ingredients:', ingreds)
@@ -465,7 +455,7 @@ def update_formula(OE, order_num, data, errors):
             try:
                 item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
             except IndexError:
-                print('item %r not found' % (item_iml_id, ), verbose=2)
+                print('item %r not found' % (item_xml_id, ), verbose=2)
                 errors.append('unable to find ingredient %r in order %s' % (item_xml_id, order_num))
                 OE.fnx_pd_ingredient.unlink(ingreds_ids)
                 ingreds_ids = []
@@ -474,24 +464,27 @@ def update_formula(OE, order_num, data, errors):
         um = rec[F329.units_batch_1]
         name = '%s:%s' % (order_num, item_xml_id)
         print('        name:', name, verbose=2)
-        ingred = existing_ingredients.get(name)
+        ingred = OE.ingredients.get(name)
         if ingred is None:
             try:
-                ingreds_ids.append(OE.fnx_pd_ingredient.create({
-                    'name':name,
-                    'order_id':order_ids[order_num].id,
-                    'item_id':item_id,
-                    'qty_needed':qty,
-                    'qty_desc':um,
-                    }))
+                ingred_values = AttrDict(
+                        name=name,
+                        order_id=OE.orders[order_num].id,
+                        item_id=item_id,
+                        qty_needed=qty,
+                        qty_desc=um,
+                        )
+                ingred_values.id = OE.fnx_pd_ingredient.create(dict(ingred_values))
+                OE.ingredients[name] = ingred_values
+                ingreds_ids.append(ingred_values.id)
             except Fault as exc:
                 error('error creating %r --> %s' % (name, exc.faultCode.replace('\n\n', ':  ')))
                 continue
         else:
             # check that the important bits match
             ingredient = AttrDict()
-            if ingred.order_id.id != order_ids[order_num].id:
-                ingredient.order_id = order_ids[order_num].id
+            if ingred.order_id.id != OE.orders[order_num].id:
+                ingredient.order_id = OE.orders[order_num].id
             if ingred.item_id != item_id:
                 ingredient.item_id = item_id
             if ingred.qty_needed != qty:
@@ -501,9 +494,11 @@ def update_formula(OE, order_num, data, errors):
             if ingredient:
                 OE.fnx_pd_ingredient.write(ingred.id, dict(ingredient))
             ingreds_ids.append(ingred.id)
-    remove_ingreds_ids = OE.fnx_pd_ingredient.search(
-            [('order_id','=',order_num),('id','not in',ingreds_ids)],
-            )
+    remove_ingreds_ids = [
+            i.id
+            for i in OE.ingredients
+            if i.order_no == order_num and i.id not in ingreds_ids
+            ]
     if remove_ingreds_ids:
         OE.fnx_pd_ingredient.unlink(remove_ingreds_ids)
     if ingreds_ids:
