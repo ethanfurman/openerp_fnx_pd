@@ -4,17 +4,16 @@ from __future__ import print_function
 
 from antipathy import Path
 import sys
-sys.path.insert(0, Path(__file__).path * Path('../../fis_integration/scripts'))
 
 import email
 import os
 import shutil
 import time
 from dbf import Date, Time, DateTime
-from fis_schema import F135, F320, F328, F329
 from openerplib import AttrDict, get_connection, get_records
 from openerplib.dates import LOCAL_TIME, date_to_str, datetime_to_str
 from scription import *
+from updates.fis_schema import F135, F320, F328, F329
 from VSS.constants import IndexEnum, Weekday
 from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
@@ -307,12 +306,19 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
         rows = list(sheet.rows(start_row=1))
         print('processing %d rows' % len(rows))
         for i, row in enumerate(rows, start=1):
-            print('.', end='')
             try:
+                # try to bail early: closed order and date older than three months?
+                order_num = row[Q.ORDER_NUM]
+                # print('\n%9s' % order_num, end='  ')
+                try:
+                    sched_date = fix_date(row[Q.DATE], format='ymd')
+                except ValueError:
+                    sched_date = ''
+                # print('%15s' % sched_date, end='')
                 if row == last_row:
+                    # print('=', end='')
                     continue
                 data = AttrDict()
-                order_num = row[Q.ORDER_NUM]
                 if only_order_no and order_num != only_order_no:
                     continue
                 print('  processing row %d, order %s' % (i, order_num), verbose=2)
@@ -323,13 +329,15 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                             '<row %3d> order %s: product %s not found'
                                 % (i, order_num, row[Q.ITEM_CODE]),
                             )
-                    error(' ', errors[-1])
+                    # error(' ', errors[-1])
+                    # print('p', end='')
                     continue
                 try:
                     fis_row = fis_f328[order_num]
                 except KeyError:
                     errors.append('  cannot find %s in FIS' % order_num)
-                    error(' ', errors[-1])
+                    # error(' ', errors[-1])
+                    # print('f', end='')
                     continue
                 data.dept = fis_row[F328.dept_id]
                 # the value of fis_row[F328.prod_line] should be the textual
@@ -369,12 +377,12 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                     if steps > 1:
                         data.order_no += '-%d_%d' % (step, steps)
                     print('    data.order_no:', data.order_no, verbose=2)
+                    current_oe_order = OE.orders.get(data.order_no)
+                    if current_oe_order and current_oe_order.state in ('complete','cancelled'):
+                        # print('s', end='')
+                        continue
                     data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
                     data.ordered_qty = fis_row[F328.qty_on_order]
-                    try:
-                        sched_date = fix_date(row[Q.DATE], format='ymd')
-                    except ValueError:
-                        sched_date = ''
                     if not sched_date:
                         # no schedule date, record the error
                         errors.append(
@@ -397,8 +405,7 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                     else:
                         data.finish_date = False
                     imported_orders.append(data.order_no)
-                    current_record = OE.orders.get(data.order_no)
-                    if current_record:
+                    if current_oe_order:
                         print('      checking for changed fields', verbose=2)
                         if not dryrun:
                             update_formula(order_num, data, errors)
@@ -407,33 +414,33 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                                 # TODO: remove this if once all orders have the order id attached
                                 continue
                             if k.endswith('_id'):
-                                if data[k] == current_record[k][0]:
+                                if data[k] == current_oe_order[k][0]:
                                     del data[k]
-                            elif data[k] == current_record[k]:
+                            elif data[k] == current_oe_order[k]:
                                 del data[k]
                         if data:
                             if sched_date:
                                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                                     print('deleting %s: Saturday schedule' % order_num, verbose=2)
                                     if not dryrun:
-                                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                                        OE.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
                                     continue
                                 elif (sched_date - today).days > 21:
                                     print('deleting %s: more than three weeks out' % order_num, verbose=2)
                                     if not dryrun:
-                                        OE.fnx_pd_order.unlink(current_record.id, context={'script': True})
+                                        OE.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
                                     continue
                             print('updating %s' % row[Q.ORDER_NUM], verbose=2)
                             for key in data:
                                 if key == 'order_no':
                                     # TODO: remove this if once all orders have the order id attached
                                     continue
-                                elif data[key] != current_record[key]:
-                                    print('  %s: %r -> %r' % (key, current_record[key], data[key]), verbose=2)
+                                elif data[key] != current_oe_order[key]:
+                                    print('  %s: %r -> %r' % (key, current_oe_order[key], data[key]), verbose=2)
                                 else:
                                     print('  oops, forgot to delete key', key, verbose=2)
                             if not dryrun:
-                                OE.fnx_pd_order.write(current_record.id, dict(data), context={'script': True})
+                                OE.fnx_pd_order.write(current_oe_order.id, dict(data), context={'script': True})
                     elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('skipping %s: Saturday schedule' % order_num, verbose=2)
                         continue
@@ -561,6 +568,7 @@ def update_formula(order_num, data, errors):
                         qty_desc=um,
                         )
                 ingred_values.id = OE.fnx_pd_ingredient.create(dict(ingred_values))
+                ingred_values.order_no = order_num
                 OE.ingredients[name] = ingred_values
                 ingreds_ids.append(ingred_values.id)
             except Fault as exc:
@@ -602,7 +610,7 @@ def get_order_ingredients(order, food_only=False, include_null=True):
     order, order_no = fis_f328[order], order
     item = order[F328.prod_no].strip()
     # then the ingredients
-    fulllist = [(rec[F329.ingr_id_batch_1], key, rec) for key, rec in fis_f329.get_subset(order_no)]
+    fulllist = [(rec[F329.ingr_code_batch_1], key, rec) for key, rec in fis_f329.get_subset(order_no)]
     # import pdb; pdb.set_trace()
     foodlist = []
     for ingredient, key, rec in fulllist:
