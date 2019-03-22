@@ -1,4 +1,5 @@
 scripts/latest_file
 scripts/production
+scripts/constants.py --no-suid
 scripts/updates_production updates/fnx_pd
 scripts/updates_mapping.py updates/fnx_pd_mapping.py
