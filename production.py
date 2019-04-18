@@ -75,7 +75,7 @@ class fnx_pd_ingredient(osv.Model):
             'item_id', 'fis_qty_available',
             string='Qty Avail.',
             type='float',
-	    digits=(16,2),
+            digits=(16,2),
             ),
         'confirmed': fields.related(
             'order_id', 'confirmed',
@@ -210,14 +210,14 @@ class fnx_pd_order(osv.Model):
         'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange'),
         'ordered_qty': fields.float('Requested Qty', track_visibility='onchange', oldname='qty'),
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
-        'line_id_set': fields.boolean('User Updated', help='if True, nightly script will not update this field'),
+        'line_id_set': fields.boolean('Line Locked', help='if True, nightly script will not update this field'),
         'confirmed': fields.selection(
             [('fis', 'FIS'), ('user', 'OpenERP')],
             string='Supplies reserved by',
             track_visibility='onchange',
             ),
         'schedule_date': fields.date('Run Date', track_visibility='onchange'),
-        'schedule_date_set': fields.boolean('User Updated', help='if True, nightly script will not update this field'),
+        'schedule_date_set': fields.boolean('Date Locked', help='if True, nightly script will not update this field'),
         'sequence': fields.integer('Order of Production'),
         'start_date': fields.datetime('Production Started', oldname='started', track_visibility='onchange'),
         'finish_date': fields.datetime('Production Finished', oldname='completed', track_visibility='onchange'),
@@ -421,7 +421,7 @@ class fnx_pd_product_ingredient(osv.Model):
             'item_id', 'fis_qty_available',
             string='Qty Avail.',
             type='float',
-	    digits=(16,2),
+            digits=(16,2),
             ),
         }
 
