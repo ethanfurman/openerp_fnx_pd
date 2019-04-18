@@ -109,7 +109,8 @@ def process(file_to_process='', order='', dryrun=False):
     for file in files:
         print('using file:', file)
         imported_orders, errors = import_spreadsheet(file, order or None, dryrun=dryrun)
-        check_open_orders(dryrun=dryrun)
+        if not order:
+            check_open_orders(dryrun=dryrun)
         if errors:
             if CONFIG.db.startswith('test') or dryrun:
                 # do not send mail from test machines nor during dry runs
@@ -378,9 +379,13 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                         data.order_no += '-%d_%d' % (step, steps)
                     print('    data.order_no:', data.order_no, verbose=2)
                     current_oe_order = OE.orders.get(data.order_no)
-                    if current_oe_order and current_oe_order.state in ('complete','cancelled'):
-                        # print('s', end='')
-                        continue
+                    if current_oe_order:
+                        if 'state' not in current_oe_order:
+                            error('missing state field')
+                            abort(current_oe_order)
+                        elif current_oe_order.state in ('complete','cancelled'):
+                            # print('s', end='')
+                            continue
                     data.confirmed = (False, 'fis')[fis_row[F328.order_confirmed] == 'Y']
                     data.ordered_qty = fis_row[F328.qty_on_order]
                     if not sched_date:
@@ -408,7 +413,8 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                     if current_oe_order:
                         print('      checking for changed fields', verbose=2)
                         if not dryrun:
-                            update_formula(order_num, data, errors)
+                            pass
+                            # update_formula(order_num, data, errors)
                         for k in data.keys():
                             if k == 'order_no':
                                 # TODO: remove this if once all orders have the order id attached
@@ -417,7 +423,15 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                                 if data[k] == current_oe_order[k][0]:
                                     del data[k]
                             elif data[k] == current_oe_order[k]:
-                                del data[k]
+                                try:
+                                    old_values = data._values.copy()
+                                    old_keys = data._keys[:]
+                                    del data[k]
+                                except ValueError:
+                                    print('FAILURE', k)
+                                    print(old_values)
+                                    print(old_keys)
+                                    raise
                         if data:
                             if sched_date:
                                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
@@ -577,7 +591,7 @@ def update_formula(order_num, data, errors):
         else:
             # check that the important bits match
             ingredient = AttrDict()
-            if ingred.order_id.id != OE.orders[order_num].id:
+            if ingred.order_id != OE.orders[order_num].id:
                 ingredient.order_id = OE.orders[order_num].id
             if ingred.item_id != item_id:
                 ingredient.item_id = item_id
