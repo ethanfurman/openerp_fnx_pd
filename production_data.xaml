@@ -10,14 +10,14 @@
             @res_model: fnx.pd.order
             @default eval='True'
             @sequence eval='1'
-            @description: Production order scheduled.
+            @description: Production order imported.
 
         ~record model='mail.message.subtype' #mt_fnx_pd_sequenced
-            @name: Sequenced
+            @name: Scheduled
             @res_model: fnx.pd.order
             @default eval='False'
             @sequence eval='11'
-            @description: Production order sequenced.
+            @description: Production order scheduled.
 
         ~record model='mail.message.subtype' #mt_fnx_pd_running
             @name: Running
