@@ -102,7 +102,7 @@ class product_product(osv.Model):
         'fis_qty_makeable': fields.function(
             _calc_makeable,
             type='float',
-	    digits=(15,3),
+            digits=(15,3),
             string='Immediately Producible',
             help="How much can be made with current inventory.",
             store={
