@@ -288,18 +288,21 @@ class fnx_pd_order(osv.Model):
         for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
             final_record = Proposed(self, cr, values, record, context)
             vals = values.copy()
-            if nightly and 'line_id' in vals and final_record.line_id_set:
-                del vals['line_id']
-                final_record.line_id = record.line_id
-            if nightly and 'schedule_date' in vals and final_record.schedule_date_set:
-                del vals['schedule_date']
-                final_record.schedule_date = record.schedule_date
-            if not final_record.line_id_set and final_record.state != 'draft':
+
+            if nightly:
+                if 'line_id' in vals and final_record.line_id_set:
+                    del vals['line_id']
+                    final_record.line_id = record.line_id
+                if 'schedule_date' in vals and final_record.schedule_date_set:
+                    del vals['schedule_date']
+                    final_record.schedule_date = record.schedule_date
+            else:
+                if 'line_id' in vals and not final_record.line_id_set:
                     vals['line_id_set'] = True
-            if not nightly and 'line_id' in vals and not final_record.line_id_set:
+                if 'schedule_date' in vals and not final_record.schedule_date_set:
+                    vals['schedule_date_set'] = True
+            if not final_record.line_id_set and final_record.state != 'draft':
                 vals['line_id_set'] = True
-            if not nightly and 'schedule_date' in vals and not final_record.schedule_date_set:
-                vals['schedule_date_set'] = True
             try:
                 if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
                     return False
