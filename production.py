@@ -284,7 +284,7 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         if not ids:
             return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
-        nightly = (context or {}).get('script', False)
+        nightly = (context or {}).get('fis-updates', False)
         for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
             final_record = Proposed(self, cr, values, record, context)
             vals = values.copy()
