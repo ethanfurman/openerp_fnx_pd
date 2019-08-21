@@ -763,7 +763,8 @@ def handle_production_order(method):
                         new_order
                         added_order_records[order_no] = new_order
                     elif new_order is None:
-                        deleted_records[order_no] = old_order
+                        if old_order.state not in ('complete', 'cancelled'):
+                            deleted_records[order_no] = old_order
                     else:
                         old_changed_order_records[order_no] = old_order
                         new_changed_order_records[order_no] = new_order
