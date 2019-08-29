@@ -1001,6 +1001,8 @@ def handle_production_detail(method):
     def ignore_order_detail(rec):
         if rec[F329.item_type_batch_1] == 'M':
             return True
+        elif rec[F329.ingr_code_batch_1] in ignored_ingredients:
+            return True
         order_no = rec[F329.order_no]
         if order_no in oe_orders:
             if oe_orders[order_no].state in ['complete','cancelled']:
