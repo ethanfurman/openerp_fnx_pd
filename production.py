@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 class fnx_pd_ingredient(osv.Model):
-    _name = 'fnx.pd.ingredient' # (F329)
+    _name = 'fnx.pd.ingredient' # (F329) ingredients actually used in the Production Sales Order
     _order = 'item_id'
     _rec_name = 'item_id'
 
@@ -91,7 +91,7 @@ class fnx_pd_ingredient(osv.Model):
 
 
 class fnx_pd_order(osv.Model):
-    "production order" # (F328)
+    "production order" # (F328)  Production Sales Order
     _name = 'fnx.pd.order'
     _description = 'production order'
     _inherit = ['mail.thread']
@@ -379,7 +379,7 @@ class fnx_pd_order(osv.Model):
         return self.write(cr, uid, ids, {'state':state}, context=context)
 
 class fnx_pd_product_formula(osv.Model):
-    "product formula information" # (F320)
+    "product formula information" # (F320) Formula Master File
     _name = 'fnx.pd.product.formula'
     _order = 'formula'
 
@@ -393,7 +393,7 @@ class fnx_pd_product_formula(osv.Model):
         }
 
 class fnx_pd_product_ingredient(osv.Model):
-    "ingredient for product formula" # (F322)
+    "ingredient for product formula" # (F322) Formula Ingredient Detail
     _name = 'fnx.pd.product.ingredient'
     _order = 'formula_id'
 
@@ -532,6 +532,7 @@ class production_line_map_entry(osv.Model):
         'map_id': fields.many2one('fnx.pd.multiline', 'Multiline Bundle', ondelete='cascade'),
         'line_id': fields.many2one('fis_integration.production_line', string='Line', ondelete='restrict'),
         'sequence': fields.integer('Sequence', help='allows drag-n-drop ordering; actual value is irrelevent'),
+        'name': fields.related('line_id', 'name', string='Name', type='char', size=40),
         }
 
 class pd_order_clean(osv.TransientModel):
