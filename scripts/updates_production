@@ -8,12 +8,14 @@ from aenum import IntEnum
 from antipathy import Path
 from dbf import Date, Time, DateTime
 from collections import defaultdict
+from fis_schema import F320, F322, F328, F329
 from openerplib import AttrDict, get_connection, get_records, Many2One
 from openerplib.dates import date_to_str, datetime_to_str, local_to_utc
 from pandaemonium import PidLockFile
 from pytz import timezone
+from recipe import ignored_ingredients
 from time import sleep
-from tools import allow_exception, FISenum, combine_by_value, Model, compare_fis_records as get_changed_fis_records
+from tools import allow_exception, combine_by_value, Model, compare_fis_records as get_changed_fis_records
 from VSS.BBxXlate.fisData import fisData
 from VSS.constants import Weekday
 from VSS.finance import FederalHoliday
@@ -509,8 +511,8 @@ def handle_product_ingredient(method):
                     ],
                 address_fields=[],
                 ignore=lambda r: ('%s-%s' % (r[F322.formula_id], r[F322.rev_no]) not in formulae
-                                  or r[F322.ingr_id_batch_1] not in oe_items
-                                  or r[F322.ingr_id_batch_1] in ignored_ingredients
+                                  or r[F322.ingr_code_batch_1] not in oe_items
+                                  or r[F322.ingr_code_batch_1] in ignored_ingredients
                                   ),
                 )
         #
@@ -567,9 +569,9 @@ def handle_product_ingredient(method):
         for fis_rec in ifdt.values():
             if '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no]) not in formulae:
                 continue
-            if fis_rec[F322.ingr_id_batch_1] not in oe_items:
+            if fis_rec[F322.ingr_code_batch_1] not in oe_items:
                 continue
-            if fis_rec[F322.ingr_id_batch_1] in ignored_ingredients:
+            if fis_rec[F322.ingr_code_batch_1] in ignored_ingredients:
                 continue
             ingredient = convert_ifdt_rec(fis_rec)
             all_fis_records[ingredient.name] = ingredient
@@ -735,7 +737,7 @@ def handle_production_order(method):
                 enum_schema=[
                     F328.order_no, F328.produced, F328.confirmed, F328.prod_id,
                     F328.formula_id, F328.formula_rev, F328.dept_id, F328.prod_line,
-                    F328.prod_sched_date, F328.prod_date, F328.units_produced,
+                    F328.prod_scheduled_date, F328.prod_date, F328.units_produced,
                     ],
                 address_fields=[],
                 )
@@ -1024,11 +1026,11 @@ def handle_production_detail(method):
                 ifpp1_old.values(),
                 ifpp1.values(),
                 enum_schema=[
-                    F329.order_no, F329.ingr_id_batch_1, F329.units_batch_1, F329.qty_batch_1
+                    F329.order_no, F329.ingr_code_batch_1, F329.units_batch_1, F329.qty_batch_1
                     ],
                 address_fields=[],
                 ignore=ignore_order_detail,
-                key=(F329.company_id, F329.order_no, F329.ingr_id_batch_1),
+                key=(F329.company_id, F329.order_no, F329.ingr_code_batch_1),
                 )
         #
         # and convert the new and deleted records
@@ -1445,11 +1447,11 @@ def convert_ifdt_rec(fis_rec):
     #   formula_id, item_id, qty_needed, qty_desc
     #
     # using:
-    #   F322.formula_id, F322.rev_no, F322.ingr_id_batch_1, F322.qty_batch_1, F322.units_batch_1
+    #   F322.formula_id, F322.rev_no, F322.ingr_code_batch_1, F322.qty_batch_1, F322.units_batch_1
     #
     ingredient = AttrDict()
     ingredient.formula_id = formula = '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no])
-    ingredient.item_id = item = fis_rec[F322.ingr_id_batch_1]
+    ingredient.item_id = item = fis_rec[F322.ingr_code_batch_1]
     ingredient.name = '%s:%s' % (formula, item)
     ingredient.qty_needed = fis_rec[F322.qty_batch_1]
     ingredient.qty_desc = fis_rec[F322.units_batch_1]
@@ -1480,7 +1482,7 @@ def convert_ifpp0_rec(fis_rec):
     #
     # F328.order_no, F328.produced, F328.confirmed, F328.prod_id,
     # F328.formula_id, F328.formula_rev, F328.dept_id, F328.prod_line,
-    # F328.prod_sched_date, F328.prod_date, F328.units_produced,
+    # F328.prod_scheduled_date, F328.prod_date, F328.units_produced,
     #
     # multiple lines ARE NOT split
     #
@@ -1495,14 +1497,14 @@ def convert_ifpp0_rec(fis_rec):
     else:
         order.state = False
     order.confirmed = (False, 'fis')[fis_rec[F328.confirmed] == 'Y']
-    order.item_id = oe_products[fis_rec[F328.prod_id]]
+    order.item_id = oe_products[fis_rec[F328.prod_no]]
     order.formula_code = '[%s-%s] %s' % (
             fis_rec[F328.formula_id].strip(), fis_rec[F328.formula_rev], fis_rec[F328.label_name],
             )
     order.dept = fis_rec[F328.dept_id] or False
     order.line_id = ('0' + fis_rec[F328.prod_line])[-2:]
     order.line_id_set = False
-    sched_date = fix_date(fis_rec[F328.prod_sched_date], 'ymd') or False
+    sched_date = fix_date(fis_rec[F328.prod_scheduled_date], 'ymd') or False
     if sched_date:
         sched_date = date_to_str(sched_date)
     order.schedule_date = sched_date
@@ -1520,7 +1522,7 @@ def convert_ifpp1_rec(fis_rec):
     #   name, order_id, item_id, qty_needed, qty_desc
     #
     # using:
-    #   F329.order_no, F329.ingr_id_batch_1, F329.qty_batch_1, F329.units_batch_1
+    #   F329.order_no, F329.ingr_code_batch_1, F329.qty_batch_1, F329.units_batch_1
     #
     ingredient = AttrDict()
     ingredient.order_id = order = fis_rec[F329.order_no]
@@ -1615,205 +1617,5 @@ def split_steps(order):
             orders[num_step] = order_step
     return orders
 
-
-# schemas
-
-class F320(FISenum):
-    """
-    IFMS - FORMULA MASTER FILE
-    """
-    company_id            = 'An$(1,2)',    0   # Company Code
-    formula_id            = 'An$(3,10)',   1   # Formula Code
-                                               # (Open) An$(13,2)
-    rev_no                = 'An$(15,3)',   3   # Revision Number
-    key_type              = 'An$(18,1)',   4   # Key Group = "0"
-    desc                  = 'Bn$',         5   # Description
-    coating               = 'Cn$',         6   # Project Number (mis-named)
-    date_issued           = 'Dn$(1,6)',    7   # Date Issued
-    date_revised          = 'Dn$(7,6)',    8   # Date Revised
-    date_of_last_run      = 'Dn$(13,6)',   9   # Date Of Last Run
-    date_put_on_hold      = 'Dn$(19,6)',  10   # Date Put On Hold
-    date_written          = 'Dn$(25,6)',  11   # Date Written
-    approved_by           = 'Dn$(31,3)',  12   # Approved By
-    changed_by            = 'Dn$(34,3)',  13   # Changed By
-    change_approved_by    = 'Dn$(37,3)',  14   # Change Approved By
-    date_to_retest        = 'Dn$(40,3)',  15   # Date to Retest
-    last_sales_ord        = 'En$(1,6)',   16   # Last Sales Ord. #
-    last_cust             = 'En$(7,6)',   17   # Last Customer #
-    dept_id               = 'En$(13,2)',  18   # Department Code
-    color                 = 'En$(15,20)', 19   # Color
-    formulated_by         = 'Fn$(1,3)',   20   # Formulated By
-    formula_type          = 'Fn$(4,1)',   21   # Formula Type
-    ok_to_use             = 'Fn$(5,1)',   22   # Ok To Use?
-    hold_reason           = 'Fn$(6,2)',   23   # Hold Reason
-    change_reason_id      = 'Fn$(8,2)',   24   # Change Reason Code
-    test_w_milk           = 'Fn$(10,1)',  25   # Test W. Milk?
-    tablet_type           = 'Fn$(11,3)',  26   # Tablet Type
-    normal_prod_line      = 'Fn$(14,2)',  27   # Normal Production Line
-    serving_size_units    = 'Fn$(16,2)',  28   # Serving Size Units
-    bulk_item_id          = 'Fn$(18,6)',  29   # Bulk Item Code
-                                               # (open) Fn$(24,2)
-    prod_units            = 'Fn$(26,2)',  31   # Production Units
-    allergens             = 'Fn$(28,8)',  32   # Alpha Sort Key (mis-named)
-    std_batch_sizes       = 'Fn$(36,1)',  33   # Std Batch Sizes? (Y/N)
-    tube_size             = 'Fn$(37,2)',  34   # Tube Size
-                                               # (open) Fn$(39,2)
-    label_name            = 'Gn$',        36   # Label Name
-    reference_no          = 'Hn$',        37   # Reference No.
-    previous_reference_no = 'In$',        38   # Previous Reference No.
-    comment_line_1        = 'Jn$',        39   # Comment Line 1
-    comment_line_2        = 'Kn$',        40   # Comment Line 2
-    serving_size          = 'An',         41   # Serving Size
-    expected_yield        = 'Bn',         42   # Expected Yield %
-    hardness_range_low    = 'Cn',         43   # Hardness Range - Low
-    hardness_range_high   = 'Dn',         44   # Hardness Range - High
-    mos_shelf_life        = 'En',         45   # Mos Shelf Life
-                                               # (open) Fn
-    largest_batch_size    = 'Gn',         47   # Largest Batch Size
-    weight_10             = 'Hn',         48   # Weight/10
-                                               # (Open) In
-                                               # (Open) Jn
-
-class F322(FISenum):
-    """
-    IFDT - FORMULA DETAIL - INGREDIENT DETAIL
-    """
-    company_id                = 'An$(1,2)',    0       # Company Code
-    formula_id                = 'An$(3,10)',   1       # Formula Code
-    rev_no                    = 'An$(15,3)',   3       # Revision Number
-    key_type                  = 'An$(18,1)',   4       # Key Group = "0"
-    line_id                   = 'An$(19,3)',   5       # Line Number
-    ingr_id_batch_1           = 'Bn$(1,8)',    6       # Ingredient Code - Batch 1
-    item_type_batch_1         = 'Cn$(1,1)',   10       # Item Type - Batch 1
-    units_batch_1             = 'Dn$(1,2)',   14       # Units - Batch 1
-    desc_batch_1              = 'Fn$(1,48)',  19       # Desc - Batch 1
-    lbl_claim_batch_1         = 'Gn$(1,8)',   23       # Lbl Claim - Batch 1
-    pct_over_batch_1          = 'Hn$(1,2)',   27       # Pct Over - Batch 1
-    pct_in_formula_batch_1    = 'A(1)',       31       # Pct In Formula - Batch 1
-    qty_batch_1               = 'B(1)',       35       # Qty - Batch 1
-
-class F323(FISenum):
-    """
-    IFDT1 - FORMULA DETAIL - PRODUCTION INFO
-    """
-    company_id     = 'An$(1,2)',   0    # Company Code
-    formula_id     = 'An$(3,10)',  1    # Formula Code
-    rev_no         = 'An$(15,3)',  3    # Revision Number
-    key_type       = 'An$(18,1)',  4    # Key Group = "1"
-    batch_id       = 'An$(19,2)',  5    # Batch Id
-    desc           = 'Bn$',        6    # Description
-    comments       = 'Cn$',        7    # Comments
-    gross_weight   = 'An',        13    # Gross Weight (Lbs)
-    yield_in_units = 'Bn',        14    # Yield In Units
-    yield_pct      = 'Cn',        15    # Yield %
-    labor_hours    = 'Dn',        16    # Labor Hours
-
-class F328(FISenum):
-    """
-    IFPP0 - SALES ORDER PRODUCTION PENDING - HEADER
-    """
-    company_id              = 'An$(1,2)',      0   # Company Code
-    order_no                = 'An$(3,6)',      1   # Order Number
-    release_no              = 'An$(9,2)',      2   # Release No
-    seq_no                  = 'An$(11,3)',     3   # Sequence No
-    record_type_0000        = 'An$(14,4)',     4   # Record Type = '0000'
-    formula_type            = 'Bn$(2,1)',      6   # Formula Type (P/L/T/X/V/K)
-    produced                = 'Bn$(8,1)',     12   # Produced (Y/N/P/X)
-    confirmed               = 'Bn$(13,1)',    16   # Order Confirmed?
-    prod_id                 = 'Cn$(1,8)',     18   # Product Number
-    label                   = 'Cn$(9,6)',     19   # Label
-    pallets                 = 'Cn$(15,4)',    20   # Pallets
-    formula_id              = 'Cn$(19,10)',   21   # Formula Code
-    formula_rev             = 'Cn$(29,3)',    22   # Formula Revision
-    label_name              = 'Cn$(111,40)',  31   # Label Name
-    dept_id                 = 'Cn$(157,2)',   35   # Department Code
-    prod_line               = 'Cn$(159,2)',   36   # Production Line
-    prod_sched_date         = 'Fn$(1,6)',     40   # Production Scheduled Date
-    prod_date               = 'Fn$(13,6)',    42   # Production Date
-    units_ordered           = 'An',           50   # Units Ordered
-    prod_qty                = 'Bn',           51   # Production Qty
-    units_produced          = 'Ln',           61   # Units Produced
-    no_of_lots_produced     = 'Mn',           62   # No Of Lots Produced
-    qty_on_order            = 'Nn',           63   # Qty On Order
-
-class F329(FISenum):
-    """
-    IFPP1 - SALES ORDER PRODUCTION PENDING - DETAIL
-    """
-    company_id             = 'An$(1,2)',   0   # Company Code
-    order_no               = 'An$(3,6)',   1   # Order Number
-    release_no             = 'An$(9,2)',   2   # Release No
-    sales_order_seq        = 'An$(11,3)',  3   # Sales Order Seq
-    key_type               = 'An$(14,1)',  4   # Key Type = "1"
-    formula_line_no        = 'An$(15,3)',  5   # Formula Line No
-    ingr_id_batch_1        = 'Bn$(1,8)',   6   # Ingredient Code - Batch 1
-    item_type_batch_1      = 'Cn$(1,1)',   8   # Item Type - Batch 1
-    units_batch_1          = 'Dn$(1,2)',  11   # Units - Batch 1
-    desc                   = 'En$',       15   # Description (Item Or Msg)
-    qty_batch_1            = 'B(1)',      23   # Quantity - Batch 1
-    qty_committed_batch_1  = 'B(3)',      25   # Qty Committed - Batch 1
-
-ignored_ingredients = set([
-        # nutritional info
-        '910000', '910001', '910002', '910003', '910004', '910005', '910006',
-        '910007', '910008',
-        # misc
-        '900110', '900111', '900112', '900113', '900115', '900200', '900205',
-        '900210', '900215', '900230', '900235', '900291', '900448', '900485',
-        '900700', '900715', '900900', '900910', '900915', '900917', '900918',
-        '900920', '900921', '900922', '900930', '900932', '900935', '900940',
-        '900950', '900951', '900952', '900954', '900960', '900962', '900965',
-        '900970', '900975', '900980', '900983', '900985', '900986', '900995',
-        '901000', '901005', '901006', '901008', '901009', '901010', '901011',
-        '901012', '901013', '901014', '901019', '901021', '901023', '901028',
-        '901031', '901040', '901041', '901042', '901043', '901044', '901045',
-        '901046', '901050', '901065', '901091', '901093', '901095', '901097',
-        '901098', '901100', '901101', '901102', '901105', '901107', '901111',
-        '901112', '901113', '901117', '901128', '901130', '901131', '901132',
-        '901133', '901134', '901135', '901200', '901210', '901245', '901265',
-        '901279', '901285', '901286', '901288', '901291', '901292', '901293',
-        '901295', '901298', '901302', '901315', '901327', '901329', '901331',
-        '901338', '901340', '901352', '901370', '901372', '901375', '901380',
-        '901400', '901401', '901403', '901404', '901406', '901407', '901409',
-        '901425', '901451', '901465', '901467', '901468', '901469', '901500',
-        '901502', '901505', '901507', '901510', '901520', '901521', '901522',
-        '901523', '901524', '901525', '901530', '901531', '901532', '901533',
-        '901570', '901571', '901572', '901630', '902002', '902003', '902004',
-        '902005', '902006', '902007', '902008', '902022', '902025', '902027',
-        '902071', '902073', '902076', '902078', '902101', '902105', '902120',
-        '902125', '902126', '902127', '902128', '902130', '902134', '902136',
-        '902140', '902143', '902150', '902152', '902280', '902281', '902282',
-        '902283', '902288', '902495', '902498', '902499', '902500', '902501',
-        '902502', '902503', '902663', '904108', '905001', '905005', '905008',
-        '905010', '905015', '905016', '905685', '905700', '905703', '905728',
-        '906017', '906050', '906063', '906212', '906220', '906223', '906225',
-        '906704', '906705', '906706', '906707', '907134', '907135', '907149',
-        '909450', '910103', '910109', '913810', '914108', '916105', '916107',
-        '919163', '919164', '919165', '919180', '921112', '921113', '921115',
-        '921117', '921120', '921121', '921122', '921123', '921124', '921125',
-        '921126', '921127', '921128', '921129', '921130', '921132', '921133',
-        '921138', '921211', '921212', '921300', '921308', '921310', '921312',
-        '921313', '921314', '921315', '921320', '921322', '921325', '921330',
-        '921335', '921336', '921337', '921338', '921340', '921342', '921345',
-        '922162', '922166', '922167', '922600', '922601', '922602', '922603',
-        '922604', '922605', '922606', '922607', '922608', '922609', '922610',
-        '922611', '922612', '922613', '922614', '922615', '922616', '922617',
-        '922618', '923610', '923613', '923614', '923615', '923616', '923617',
-        '923618', '923619', '923621', '923622', '929340', '929450', '929550',
-        '929551', '929552', '929553', '929610', '936148', '936149', '936150',
-        '936151', '936152', '936153', '936154', '939105', '940105', '940200',
-        '940201', '940202', '940205', '940210', '940215', '940220', '940225',
-        '949448', '949495', '949555', '950800', '950808', '950815', '950817',
-        '950820', '950830', '950831', '950832', '950834', '950837', '950925',
-        '950926', '950927', '950929', '961005', '961007', '967005', '967052',
-        '968103', '968107', '969025', '969027', '969031', '970000', '970150',
-        '970220', '970221', '971050', '971051', '971052', '981040', '981095',
-        '981097', '981112', '981312', '981400', '985002', '985003', '985103',
-        '986063', '986064', '986065', '986066', '986067', '986700', '990103',
-        '990605', '995000', '995100', '999016', '999017', '999018',
-        # freight charges
-        '967001', '967003', '967004', '993030', '993040', '996000', '996001',
-        '996002', '996333', '996555', '997090',
-        ])
 
 Main()
