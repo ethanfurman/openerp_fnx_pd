@@ -506,7 +506,7 @@ def handle_product_ingredient(method):
                 ifdt_old.values(),
                 ifdt.values(),
                 enum_schema=[
-                    F322.formula_id, F322.rev_no, F322.desc_batch_1,
+                    F322.formula_id, F322.rev_no, F322.desc_batch_1, F322.line_no,
                     ],
                 address_fields=[],
                 ignore=lambda r: ('%s-%s' % (r[F322.formula_id], r[F322.rev_no]) not in formulae
@@ -549,7 +549,7 @@ def handle_product_ingredient(method):
             (r.name, r)
             for r in fnx_pd_ingredient.read(
                 fields=[
-                    'id', 'name', 'formula_id', 'item_id', 'qty_needed', 'qty_desc',
+                    'id', 'name', 'sequence', 'formula_id', 'item_id', 'qty_needed', 'qty_desc',
                     ],
                 )])
     elif method == 'full':
@@ -577,7 +577,7 @@ def handle_product_ingredient(method):
             (r.name, r)
             for r in fnx_pd_ingredient.read(
                 fields=[
-                    'id', 'name', 'formula_id', 'item_id', 'qty_needed', 'qty_desc',
+                    'id', 'name', 'sequence', 'formula_id', 'item_id', 'qty_needed', 'qty_desc',
                     ],
                 )])
         #
@@ -1420,6 +1420,7 @@ def convert_ifdt_rec(fis_rec):
     ingredient.formula_id = formula = '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no])
     ingredient.item_id = item = fis_rec[F322.ingr_code_batch_1]
     ingredient.name = '%s:%s' % (formula, item)
+    ingredient.sequence = fis_rec[F322.line_no] or False
     ingredient.qty_needed = fis_rec[F322.qty_batch_1]
     ingredient.qty_desc = fis_rec[F322.units_batch_1]
     return ingredient
@@ -1504,6 +1505,7 @@ def convert_ifpp1_rec(fis_rec):
     #
     ingredient.item_id = item = fis_rec[F329.ingr_code_batch_1]
     ingredient.name = '%s:%s' % (order, item)
+    ingredient.sequence = fis_rec[F329.formula_line_no]
     ingredient.qty_needed = fis_rec[F329.qty_batch_1] * batches_needed
     ingredient.qty_desc = fis_rec[F329.units_batch_1]
     return ingredient

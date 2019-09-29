@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 class fnx_pd_ingredient(osv.Model):
     _name = 'fnx.pd.ingredient' # (F329) ingredients actually used in the Production Sales Order
-    _order = 'item_id'
+    _order = 'item_id, sequence'
     _rec_name = 'item_id'
 
     def _get_qty_needed_desc(self, cr, uid, ids, field_name, args, context=None):
@@ -30,6 +30,7 @@ class fnx_pd_ingredient(osv.Model):
 
     _columns = {
         'name': fields.char('Name', size=19, required=True),  # 'order:item'  (12:6)  (+6 due to order_step_total)
+	'sequence': fields.integer('Sequence'),
         'order_ids': fields.many2many(
             'fnx.pd.order',
             'order2ingredients_rel', 'ingredient_id', 'order_id',
@@ -405,7 +406,7 @@ class fnx_pd_product_formula(osv.Model):
 class fnx_pd_product_ingredient(osv.Model):
     "ingredient for product formula" # (F322) Formula Ingredient Detail
     _name = 'fnx.pd.product.ingredient'
-    _order = 'formula_id'
+    _order = 'formula_id, sequence'
 
     def _get_qty_needed_desc(self, cr, uid, ids, field_name, args, context=None):
         res = {}
@@ -419,6 +420,7 @@ class fnx_pd_product_ingredient(osv.Model):
 
     _columns = {
         'name': fields.char('Name', size=17),  # 'formula-rev:item'  (6-3:6)
+	'sequence': fields.integer('Sequence'),
         'formula_id': fields.many2one('fnx.pd.product.formula'),
         'item_id': fields.many2one('product.product', string='Ingredient'),
         'qty_needed': fields.float('Qty Needed'),
