@@ -30,14 +30,18 @@ class fnx_pd_ingredient(osv.Model):
 
     _columns = {
         'name': fields.char('Name', size=19, required=True),  # 'order:item'  (12:6)  (+6 due to order_step_total)
-        'order_id': fields.many2one('fnx.pd.order', 'Order', ondelete='cascade', required=True),
+        'order_ids': fields.many2many(
+            'fnx.pd.order',
+            'order2ingredients_rel', 'ingredient_id', 'order_id',
+            string='Order',
+            ),
         'order_no': fields.related(
-            'order_id', 'order_no',
+            'order_ids', 'order_no',
             string='Order #',
             type='char',
             ),
         'order_state': fields.related(
-            'order_id', 'state',
+            'order_ids', 'state',
             string='Order State',
             type='selection',
             selection=[
@@ -50,13 +54,13 @@ class fnx_pd_ingredient(osv.Model):
                 ('cancelled', 'Cancelled'),
                 ]),
         'order_product': fields.related(
-            'order_id', 'item_id',
+            'order_ids', 'item_id',
             string='Product',
             type='many2one',
             obj='product.product'
             ),
         'order_schedule_date': fields.related(
-            'order_id', 'schedule_date',
+            'order_ids', 'schedule_date',
             string='Run date',
             type='date',
             ),
@@ -78,16 +82,14 @@ class fnx_pd_ingredient(osv.Model):
             digits=(16,2),
             ),
         'confirmed': fields.related(
-            'order_id', 'confirmed',
+            'order_ids', 'confirmed',
             string='Reserved by',
             type='selection',
             selection=[('fis', 'FIS'), ('user', 'OpenERP')],
             ),
         }
 
-    _sql_constraints = [
-            ('uniq_order_item', 'unique(order_id, item_id)', 'Item ingredient must be unique per order'),
-            ]
+    _sql_constraints = []
 
 
 class fnx_pd_order(osv.Model):
@@ -232,7 +234,11 @@ class fnx_pd_order(osv.Model):
         'formula_code': fields.char('Formula & Rev', size=64),
         'coating': fields.char('Coating', size=10, track_visibility='onchange'),
         'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
-        'ingredient_ids': fields.one2many('fnx.pd.ingredient', 'order_id', 'Ingredients'),
+        'ingredient_ids': fields.many2many(
+            'fnx.pd.ingredient',
+            'order2ingredients_rel', 'order_id', 'ingredient_id',
+            string='Ingredients',
+            ),
         # status color
         'color': fields.function(
             _get_color,
@@ -391,6 +397,10 @@ class fnx_pd_product_formula(osv.Model):
         'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
         'ingredient_ids': fields.one2many('fnx.pd.product.ingredient', 'formula_id', 'Ingredients'),
         }
+
+    _sql_constraints = [
+            ('uniq_formula_name', 'unique(name)', 'Formulae must be unique'),
+            ]
 
 class fnx_pd_product_ingredient(osv.Model):
     "ingredient for product formula" # (F322) Formula Ingredient Detail
