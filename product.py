@@ -39,7 +39,7 @@ class product_product(osv.Model):
                 fields=['id','formula_id'],
                 context=context
                 )
-        formulae_ids = [ingred['formula_id'][0] for ingred in ingredients]
+        formulae_ids = [ingred['formula_id'] and ingred['formula_id'][0] for ingred in ingredients]
         product_ids = self.search(
                 cr, SUPERUSER_ID,
                 [('fnx_pd_formula_id','in',formulae_ids)],
@@ -99,15 +99,10 @@ class product_product(osv.Model):
             string='Ingredient for',
             domain=[('order_state','not in',['complete','cancelled'])],
             ),
-        'fis_qty_makeable': fields.function(
-            _calc_makeable,
-            type='float',
-            digits=(15,3),
+        'fis_qty_makeable': fields.float(
             string='Immediately Producible',
+            digits=(15,3),
             help="How much can be made with current inventory.",
-            store={
-                'product.product': (_get_qty_update_ids, ['fis_qty_available'], 10,),
-                },
             ),
         'fnx_pd_formula_id': fields.function(
             _get_item_formula,
