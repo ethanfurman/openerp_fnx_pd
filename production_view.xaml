@@ -79,7 +79,7 @@
                                         @qty_needed
                                         @qty_desc $Unit
                                         @confirmed invisible='1'
-                                        @qty_avail $Available attrs="{'invisible': [('confirmed','!=',False)]}"
+                                        @qty_avail $Available
 
                             ~page $Manager_Overrides visible="groups('fnx_pd.group_fnx_pd_manager')"
                                 ~separator $Reset_state_to
