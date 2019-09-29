@@ -1014,7 +1014,7 @@ def handle_production_detail(method):
                 ifpp1_old.values(),
                 ifpp1.values(),
                 enum_schema=[
-                    F329.order_no, F329.ingr_code_batch_1, F329.units_batch_1, F329.qty_batch_1
+                    F329.order_no, F329.ingr_code_batch_1, F329.units_batch_1, F329.qty_batch_1, F329.formula_line_no
                     ],
                 address_fields=[],
                 ignore=ignore_order_detail,
@@ -1125,7 +1125,7 @@ def handle_production_detail(method):
             for r in fnx_pd_ingredient.read(
                 domain=[('name','in',all_fis_records.keys())],
                 fields=[
-                    'id', 'name', 'order_ids', 'item_id', 'qty_needed', 'qty_desc',
+                    'id', 'name', 'sequence', 'order_ids', 'item_id', 'qty_needed', 'qty_desc',
                     ],
                 )])
         #
