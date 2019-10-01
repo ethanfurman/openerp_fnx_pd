@@ -1420,7 +1420,7 @@ def convert_ifdt_rec(fis_rec):
     ingredient.formula_id = formula = '%s-%s' % (fis_rec[F322.formula_id], fis_rec[F322.rev_no])
     ingredient.item_id = item = fis_rec[F322.ingr_code_batch_1]
     ingredient.name = '%s:%s' % (formula, item)
-    ingredient.sequence = fis_rec[F322.line_no] or False
+    ingredient.sequence = int(fis_rec[F322.line_no] or 0)
     ingredient.qty_needed = fis_rec[F322.qty_batch_1]
     ingredient.qty_desc = fis_rec[F322.units_batch_1]
     return ingredient
@@ -1488,7 +1488,7 @@ def convert_ifpp0_rec(fis_rec):
     return order
 
 def convert_ifpp1_rec(fis_rec):
-    "product ingredient"
+    "order ingredient"
     # convert the record into the following fields:
     #   name, order_id, item_id, qty_needed, qty_desc
     #
@@ -1505,7 +1505,7 @@ def convert_ifpp1_rec(fis_rec):
     #
     ingredient.item_id = item = fis_rec[F329.ingr_code_batch_1]
     ingredient.name = '%s:%s' % (order, item)
-    ingredient.sequence = fis_rec[F329.formula_line_no]
+    ingredient.sequence = int(fis_rec[F329.formula_line_no] or 0)
     ingredient.qty_needed = fis_rec[F329.qty_batch_1] * batches_needed
     ingredient.qty_desc = fis_rec[F329.units_batch_1]
     return ingredient
