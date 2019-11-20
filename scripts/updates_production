@@ -98,7 +98,6 @@ def fnx_pd(method, delete, *files, **extra):
     today = Date.today()
     cutoff = FederalHoliday.next_business_day(today, 15)
     DELETE = delete
-    files = [f.lower() for f in files if 'QALL' not in f]
     print('attempting a %s compare' % method)
     try:
         with PidLockFile('/var/run/fnx_pd_update.pid'):
