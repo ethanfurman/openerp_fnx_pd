@@ -72,24 +72,35 @@ class product_product(osv.Model):
     def _get_item_formula(self, cr, uid, ids, field_name, args, context=None):
         res = {}
         product_map = dict([
-            (p['xml_id'], p['id'])
-            for p in self.read(cr, SUPERUSER_ID, ids, fields=['xml_id'], context=context)
-            ])
+                (p['xml_id'], p['id'])
+                for p in self.read(
+                    cr, SUPERUSER_ID, ids,
+                    fields=['xml_id'],
+                    context=context,
+                    )
+                ])
         formulae_map = dict([
-            (f['name'], f['id'])
-            for f in self.pool.get('fnx.pd.product.formula').read(cr, SUPERUSER_ID, [('name','in',product_map.keys())], context=context)
-            ])
+                (f['name'], f['id'])
+                for f in self.pool.get('fnx.pd.product.formula').read(
+                    cr, SUPERUSER_ID,
+                    [('name','in',product_map.keys())],
+                    context=context,
+                    )
+                ])
         for product_name, product_id in product_map.items():
             res[product_id] = formulae_map.get(product_name, False)
         return res
 
+    # one set of fields tracks actual
     _columns = {
+        # orders and order ingredients to make this product
         'prod_order_ids': fields.one2many(
             'fnx.pd.order',
             'item_id',
             string='Production Orders',
             domain=[('state','not in',['complete','cancelled'])],
             order='schedule_date, sequence',
+            help="production orders to make this product",
             ),
         # XXX below only tracks active order ingredients -- should we also track non-active
         #     order ingrediens?
@@ -98,12 +109,14 @@ class product_product(osv.Model):
             'item_id',
             string='Ingredient for',
             domain=[('order_state','not in',['complete','cancelled'])],
+            help="ingredients from production order formula to make this product",
             ),
         'fis_qty_makeable': fields.float(
             string='Immediately Producible',
             digits=(15,3),
             help="How much can be made with current inventory.",
             ),
+        # default formula to make this product
         'fnx_pd_formula_id': fields.function(
             _get_item_formula,
             type='many2one',
@@ -112,13 +125,25 @@ class product_product(osv.Model):
             store={
                 'fnx.pd.product.formula': (_get_formula_update_ids, ['name'], 10,),
                 },
+            help="the default formula to make this item",
             ),
         'fnx_pd_formula_name': fields.related(
             'fnx_pd_formula_id', 'formula',
             string='Formula',
             type='char',
             size=14,
+            help="actually the FIS ID of the product",
             ),
+        'fnx_pd_formula_ingredient_ids': fields.related(
+            'fnx_pd_formula_id', 'ingredient_ids',
+            string='Formula Ingredients',
+            type='one2many',
+            relation='fnx.pd.product.ingredient',
+            fields_id='formula_id',
+            help="ingredients from the default formula to make this product",
+            ),
+        # coating and allergens are the same for both the default formula
+        # and production order formulas
         'fnx_pd_formula_coating': fields.related(
             'fnx_pd_formula_id', 'coating',
             string='Coating',
@@ -131,12 +156,6 @@ class product_product(osv.Model):
             type='char',
             size=10,
             ),
-        'fnx_pd_formula_ingredient_ids': fields.related(
-            'fnx_pd_formula_id', 'ingredient_ids',
-            string='Formula Ingredients',
-            type='one2many',
-            relation='fnx.pd.product.ingredient',
-            fields_id='formula_id',
-            ),
+        # miscelleny
         'fnx_pd_nutrition_files': files('nutrition', string='Nutrition Information'),
         }
