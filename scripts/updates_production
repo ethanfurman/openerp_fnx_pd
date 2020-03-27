@@ -128,16 +128,16 @@ def fnx_pd(method, delete, *files, **extra):
                 oe_production_lines[multiline.key] = lines
             #
             with allow_exception(Exception):
-                if 'ifpp' in files:
+                if 'IFPP' in files:
                     handle_production_order(method)
                     handle_production_detail(method)
             with allow_exception(Exception):
-                if 'ifms' in files:
+                if 'IFMS' in files:
                     handle_product_formula(method)
             with allow_exception(Exception):
-                if 'ifdt' in files:
+                if 'IFDT' in files:
                     handle_product_ingredient(method)
-            files = tuple([f for f in files if f not in ('ifpp', 'ifms', 'ifdt')])
+            files = tuple([f for f in files if f not in ('IFPP', 'IFMS', 'IFDT')])
             with allow_exception(Exception):
                 if method == 'full':
                     # do not run until 0545
