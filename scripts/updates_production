@@ -785,7 +785,7 @@ def handle_production_order(method):
                 fields=[
                     'id', 'order_no', 'completed_fis_qty', 'confirmed', 'item_id',
                     'formula_code', 'dept', 'line_id', 'schedule_date', 'finish_date',
-                    'completed_fis_qty', 'line_id_set', 'schedule_date_set', 'state',
+                    'line_id_set', 'schedule_date_set', 'state',
                     ],
                 )])
     elif method == 'full':
@@ -816,7 +816,7 @@ def handle_production_order(method):
                 fields=[
                     'id', 'order_no', 'completed_fis_qty', 'confirmed', 'item_id',
                     'formula_code', 'dept', 'line_id', 'schedule_date', 'finish_date',
-                    'completed_fis_qty', 'line_id_set', 'schedule_date_set', 'state',
+                    'line_id_set', 'schedule_date_set', 'state',
                     ],
                 )])
         #
