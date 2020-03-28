@@ -717,6 +717,11 @@ def handle_production_order(method):
     ifpp0 = fisData(328, rematch=r'10......000010000')
     ifms = fisData(320, rematch=r'10........0000')
     print(ifpp0.filename, len(ifpp0), verbose=2)
+    #
+    target_order = EXTRA.get('order')
+    def ignore_order(order):
+        return target_order and target_order != order[F328.order_no]
+    #
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
@@ -733,6 +738,7 @@ def handle_production_order(method):
                     F328.prod_scheduled_date, F328.prod_date, F328.units_produced,
                     ],
                 address_fields=[],
+                ignore=ignore_order,
                 )
         #
         # and convert the new and deleted records
@@ -799,6 +805,8 @@ def handle_production_order(method):
         order_numbers = []
         for fis_rec in ifpp0.values():
             for rec in split_steps(convert_ifpp0_rec(fis_rec)).values():
+                if target_order and not rec.order_no.startswith(target_order):
+                    continue
                 order_numbers.append(rec.order_no)
                 all_fis_records[rec.order_no] = rec
         #
@@ -991,7 +999,11 @@ def handle_production_detail(method):
     ifpp0 = fisData(328, keymatch='10%s00010000', rematch=r"10......000010000")
     ifpp1 = fisData(329, rematch=r"10......000010000...")
     print('%s:  %d records' % (ifpp1.filename, len(ifpp1)), verbose=2)
+    #
+    target_order = EXTRA.get('order')
     def ignore_order_detail(rec):
+        if target_order and rec['F329.order_no'] != target_order:
+            return True
         if rec[F329.item_type_batch_1] == 'M':
             return True
         elif rec[F329.ingr_code_batch_1] in ignored_ingredients:
@@ -1002,6 +1014,7 @@ def handle_production_detail(method):
         if all([order.state in ['complete','cancelled'] for order in oe_orders[order_no]]):
             return True
         return False
+    #
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
@@ -1400,10 +1413,11 @@ def add_ac(fis_rec, oe_rec):
     "add allergens and coating to rec"
     # rec is in AttrDict format
     # F328.formula_id, F328.formula_rev, F328.dept_id, F328.prod_line,
-    formula_rev = '%-10s  %-3s0' % (fis_rec[F328.formula_id], fis_rec[F328.formula_rev])
-    formula_rec = ifms[formula_rev]
-    oe_rec.coating = formula_rec[F320.coating] or False
-    oe_rec.allergens = formula_rec[F320.allergens] or False
+    formula_rev = '10%-8s  %-3s0' % (fis_rec[F328.formula_id], fis_rec[F328.formula_rev])
+    formula_rec = ifms.get(formula_rev)
+    if formula_rec:
+        oe_rec.coating = formula_rec[F320.coating] or False
+        oe_rec.allergens = formula_rec[F320.allergens] or False
     return oe_rec
 
 
