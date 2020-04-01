@@ -299,13 +299,13 @@ def handle_product_formula(method):
     # - full -> current OpenERP data
     #
     print('gathering data')
-    ifms = fisData(320, rematch=r'10........0000')
+    ifms = fisData(320, rematch=r'10(..........)..(...)0')
     print('%s:  %d records' % (ifms.filename, len(ifms)), verbose=2)
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
         #
-        ifms_old = fisData(320, rematch=r'10........0000', data_path=config.network.fis_data_local_old_path)
+        ifms_old = fisData(320, rematch=r'10(..........)..(...)0', data_path=config.network.fis_data_local_old_path)
         print('%s:  %d records' % (ifms_old.filename, len(ifms_old)), verbose=2)
         print('collecting changed records')
         changes, added, deleted = get_changed_fis_records(
@@ -492,13 +492,13 @@ def handle_product_ingredient(method):
         (i.xml_id, Many2One(i.id, i.xml_id))
         for i in get_records(oe, 'product.product', fields=['id','xml_id'], domain=[('module','=','F135')])
         ])
-    ifdt = fisData(322, rematch=r'10........0000...')
+    ifdt = fisData(322, rematch=r'10(..........)..(...)0...')
     print('%s:  %d records' % (ifdt.filename, len(ifdt)), verbose=2)
     if method == 'quick':
         #
         # for a quick compare we can use the fis records as-is when looking for changes
         #
-        ifdt_old = fisData(322, rematch=r'10........0000...', data_path=config.network.fis_data_local_old_path)
+        ifdt_old = fisData(322, rematch=r'10(..........)..(...)0...', data_path=config.network.fis_data_local_old_path)
         print('%s:  %d records' % (ifdt_old.filename, len(ifdt_old)), verbose=2)
         print('collecting changed records')
         changes, added, deleted = get_changed_fis_records(
@@ -714,8 +714,8 @@ def handle_production_order(method):
     # - full -> current OpenERP data
     #
     print('gathering data')
-    ifpp0 = fisData(328, rematch=r'10......000010000')
-    ifms = fisData(320, rematch=r'10........0000')
+    ifpp0 = fisData(328, rematch=r'10(......)000010000')
+    ifms = fisData(320, rematch=r'10(..........)..(...)0')
     print(ifpp0.filename, len(ifpp0), verbose=2)
     #
     target_order = EXTRA.get('order')
@@ -726,7 +726,7 @@ def handle_production_order(method):
         #
         # for a quick compare we can use the fis records as-is when looking for changes
         #
-        ifpp_old = fisData(328, rematch=r'10......000010000', data_path=config.network.fis_data_local_old_path)
+        ifpp_old = fisData(328, rematch=r'10(......)000010000', data_path=config.network.fis_data_local_old_path)
         print(ifpp_old.filename, verbose=2)
         print('collecting changed records')
         changes, added, deleted = get_changed_fis_records(
@@ -996,8 +996,8 @@ def handle_production_detail(method):
         for i in get_records(oe, 'product.product', fields=['id','xml_id'], domain=[('module','=','F135')])
         ])
     print('%d items found' % len(oe_items), verbose=2)
-    ifpp0 = fisData(328, keymatch='10%s00010000', rematch=r"10......000010000")
-    ifpp1 = fisData(329, rematch=r"10......000010000...")
+    ifpp0 = fisData(328, rematch=r"10(......)000010000")
+    ifpp1 = fisData(329, rematch=r"10(......)000011...")
     print('%s:  %d records' % (ifpp1.filename, len(ifpp1)), verbose=2)
     #
     target_order = EXTRA.get('order')
@@ -1019,7 +1019,7 @@ def handle_production_detail(method):
         #
         # for a quick compare we can use the fis records as-is when looking for changes
         #
-        ifpp1_old = fisData(329, rematch=r"10......000010000...", data_path=config.network.fis_data_local_old_path)
+        ifpp1_old = fisData(329, rematch=r"10(......)000011...", data_path=config.network.fis_data_local_old_path)
         print('%s:  %d records' % (ifpp1_old.filename, len(ifpp1_old)), verbose=2)
         print('collecting changed records')
         changes, added, deleted = get_changed_fis_records(
@@ -1413,7 +1413,7 @@ def add_ac(fis_rec, oe_rec):
     "add allergens and coating to rec"
     # rec is in AttrDict format
     # F328.formula_id, F328.formula_rev, F328.dept_id, F328.prod_line,
-    formula_rev = '10%-8s  %-3s0' % (fis_rec[F328.formula_id], fis_rec[F328.formula_rev])
+    formula_rev = fis_rec[F328.formula_id], fis_rec[F328.formula_rev]
     formula_rec = ifms.get(formula_rev)
     if formula_rec:
         oe_rec.coating = formula_rec[F320.coating] or False
