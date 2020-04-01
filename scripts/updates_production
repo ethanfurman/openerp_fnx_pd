@@ -10,9 +10,8 @@ from dbf import Date, Time, DateTime
 from collections import defaultdict
 from fis_schema import F320, F322, F328, F329
 from openerplib import AttrDict, get_connection, get_records, Many2One, Query
-from openerplib.dates import date_to_str, datetime_to_str, local_to_utc
+from openerplib.dates import local_to_utc
 from pandaemonium import PidLockFile
-from pytz import timezone
 from recipe import ignored_ingredients
 from time import sleep
 from tools import allow_exception, close_enough, combine_by_value, Model, compare_fis_records as get_changed_fis_records
@@ -30,10 +29,6 @@ white = C.Normal | C.FG_White
 same = C.Normal | C.FG_White
 oldv = C.Normal | C.FG_Red
 newv = C.Normal | C.FG_Green
-
-UTC = timezone('UTC')
-with open('/etc/timezone') as tz:
-    LTZ = timezone(tz.read().strip())
 
 QAll_C = IntEnum(
     'QAll_C',
@@ -716,7 +711,8 @@ def handle_production_order(method):
     print('gathering data')
     ifpp0 = fisData(328, rematch=r'10(......)000010000')
     ifms = fisData(320, rematch=r'10(..........)..(...)0')
-    print(ifpp0.filename, len(ifpp0), verbose=2)
+    print('  ', ifpp0.filename, len(ifpp0), verbose=2)
+    print('  ', ifms.filename, len(ifms), verbose=2)
     #
     target_order = EXTRA.get('order')
     def ignore_order(order):
@@ -1489,13 +1485,11 @@ def convert_ifpp0_rec(fis_rec):
     order.line_id = line_id
     order.line_id_set = False
     sched_date = fix_date(fis_rec[F328.prod_scheduled_date], 'ymd') or False
-    if sched_date:
-        sched_date = date_to_str(sched_date)
     order.schedule_date = sched_date
     order.schedule_date_set = False
     fin_date = fix_date(fis_rec[F328.prod_date], 'mdy') or False
     if fin_date:
-        fin_date = datetime_to_str(local_to_utc(DateTime.combine(fin_date, Time(17))))
+        fin_date = local_to_utc(DateTime.combine(fin_date, Time(17)))
     order.finish_date = fin_date
     order.completed_fis_qty = fis_rec[F328.units_produced] or False
     return order
