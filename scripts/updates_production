@@ -998,7 +998,7 @@ def handle_production_detail(method):
     #
     target_order = EXTRA.get('order')
     def ignore_order_detail(rec):
-        if target_order and rec['F329.order_no'] != target_order:
+        if target_order and rec[F329.order_no] != target_order:
             return True
         if rec[F329.item_type_batch_1] == 'M':
             return True
