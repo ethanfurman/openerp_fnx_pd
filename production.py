@@ -262,7 +262,7 @@ class fnx_pd_order(osv.Model):
         ]
 
     _defaults = {
-        'state': 'draft',
+        'state': 'draft',           # also checked for in create() as script may pass False
         'sequence': 0,
         'display_time': '',
         'cumulative_time': 0,
@@ -282,6 +282,7 @@ class fnx_pd_order(osv.Model):
                     context=context),
                 )
         values['message_follower_user_ids'] = follower_ids
+        values['state'] = values.get('state', 'draft')
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
         return order_id
 
