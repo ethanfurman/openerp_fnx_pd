@@ -686,6 +686,7 @@ def handle_production_order(method):
     global ifms
     cutoff_date = cutoff.strftime('%Y-%m-%d')
     print('processing production orders (IFPP0 - 328)', border=('flag', '#'))
+    print('EXTRA ->', EXTRA)
     context = {'fis-updates': True, 'active_test': False}
     fnx_pd_order = Model(oe.get_model('fnx.pd.order'), 'ifpp0', 'F328', context, RAISE_ON_EXCEPTION)
     all_oe_records = {}
@@ -850,7 +851,7 @@ def handle_production_order(method):
     #
     # process changes
     #
-    print('%d records in changed' % len(old_changed_order_records), verbose=2)
+    print('%d potentially changed records' % len(old_changed_order_records), verbose=2)
     for order_no, new_order in ProgressView(
             iterable=new_changed_order_records.items(),
             message='double-checking $total changes',
@@ -871,6 +872,11 @@ def handle_production_order(method):
         # now normalize records for good comparison
         new_order.id = old_order.id
         new_order.state = new_order.state or old_order.state
+        # if old_order already has a finish date, remove it
+        # TODO: figure out why a changed finish_date isn't updated on OpenERP
+        if old_order.finish_date:
+            del old_order.finish_date
+            del new_order.finish_date
         if old_order.line_id_set:
             new_order.line_id_set = True
             new_order.line_id = old_order.line_id
@@ -953,6 +959,7 @@ def handle_production_order(method):
 def handle_production_detail(method):
     global ifpp0, oe_orders
     print('processing product ingredients (IFPP1 - 329)', border=('flag', '#'))
+    print('EXTRA ->', EXTRA)
     context = {'fis-updates': True, 'active_test': False}
     fnx_pd_ingredient = Model(oe.get_model('fnx.pd.ingredient'), 'ifpp1', 'F329', context, RAISE_ON_EXCEPTION)
     all_oe_records = {}
