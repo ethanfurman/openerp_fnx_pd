@@ -1479,12 +1479,14 @@ def convert_ifpp0_rec(fis_rec):
     elif status == 'X':
         order.state = 'cancelled'
     else:
-        order.state = False
+        order.state = 'draft'
     order.confirmed = (False, 'fis')[fis_rec[F328.order_confirmed] == 'Y']
     order.item_id = oe_products[fis_rec[F328.prod_no]]
-    order.formula_code = '[%s-%s] %s' % (
-            fis_rec[F328.formula_id].strip(), fis_rec[F328.formula_rev], fis_rec[F328.label_name],
-            )
+    order.formula_code = (
+            '[%s-%s] %s' % (
+                fis_rec[F328.formula_id].strip(), fis_rec[F328.formula_rev], fis_rec[F328.label_name],
+                )
+            ).replace('\x01','')
     order.dept = fis_rec[F328.dept_id] or False
     line_id = fis_rec[F328.prod_line] or False
     if line_id and len(line_id) == 1:
