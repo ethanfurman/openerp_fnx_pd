@@ -390,6 +390,7 @@ class fnx_pd_product_formula(osv.Model):
     "product formula information" # (F320) Formula Master File
     _name = 'fnx.pd.product.formula'
     _order = 'formula'
+    _rec_name = 'formula'
 
     _columns = {
         'name': fields.char('Name', size=6),
@@ -401,7 +402,7 @@ class fnx_pd_product_formula(osv.Model):
         }
 
     _sql_constraints = [
-            ('uniq_formula_name', 'unique(name)', 'Formulae must be unique'),
+            ('uniq_formula_name', 'unique(formula)', 'Formulae must be unique'),
             ]
 
 class fnx_pd_product_ingredient(osv.Model):
