@@ -26,7 +26,7 @@ virtualenv = os.environ['VIRTUAL_ENV']
 logger = getLogger()
 logger.setLevel(INFO)
 _handler = handlers.TimedRotatingFileHandler(
-        '%s/var/log/continuous_sync_records.log' % virtualenv,
+        '%s/var/log/openerp/continuous_sync_records.log' % virtualenv,
         when='midnight',
         backupCount=30,
         )
@@ -463,7 +463,7 @@ def handle_product_formula(method):
         logger.info(
                 'F320: changing -- %s  -->  %s',
                 formulae,
-                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes.items()))
+                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes))
                 )
         if LIST_RECORDS:
             body = []
