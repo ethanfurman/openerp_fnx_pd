@@ -21,6 +21,19 @@ from VSS.finance import FederalHoliday
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
 import os
+from logging import INFO, getLogger, Formatter, handlers
+virtualenv = os.environ['VIRTUAL_ENV']
+logger = getLogger()
+logger.setLevel(INFO)
+_handler = handlers.TimedRotatingFileHandler(
+        '%s/var/log/continuous_sync_records.log' % virtualenv,
+        when='midnight',
+        backupCount=30,
+        )
+_formatter = Formatter('%(asctime)s %(funcName)-25s %(message)s')
+_handler.setFormatter(_formatter)
+logger.addHandler(_handler)
+del _handler, _formatter
 
 
 C = Color
@@ -402,6 +415,11 @@ def handle_product_formula(method):
             continue
         added_count += 1
         name = formula.name
+        logger.info(
+                'F320:%s -- adding -- %s',
+                name,
+                (', '.join(['%s=%r' % (k, v) for k, v in formula.items()]))
+                )
         if LIST_RECORDS:
             echo('  F320:%s' % name, end='  ')
             print(','.join(['%s=%r' % (k, v) for k, v in formula.items()]), end='', verbose=2)
@@ -421,6 +439,10 @@ def handle_product_formula(method):
                 )])
     if formulas:
         deleted_count = len(formulas)
+        logger.info(
+                'F320 -- removing -- %s',
+                ', '.join(f.formula for f in formulas.values())
+                )
         if LIST_RECORDS:
             echo('\n'.join(['  F320:%s' % f.formula for f in formulas.values()]))
         if not DRYRUN:
@@ -438,10 +460,15 @@ def handle_product_formula(method):
         formulae = [r.formula for r in records]
         oe_ids = fnx_pd_formula.search([('formula','in',formulae)])
         changed_count += len(oe_ids)
+        logger.info(
+                'F320: changing -- %s  -->  %s',
+                formulae,
+                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes.items()))
+                )
         if LIST_RECORDS:
             body = []
             for f in records:
-                body.append(('  F135:%s' % (f.formula, )))
+                body.append(('  F320:%s' % (f.formula, )))
             if script_verbosity > 1:
                 body.append('---')
                 body.append(str(AttrDict(changes)))
