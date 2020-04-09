@@ -441,7 +441,7 @@ def handle_product_formula(method):
         deleted_count = len(formulas)
         logger.info(
                 'F320 -- removing -- %s',
-                ', '.join(f.formula for f in formulas.values())
+                ', '.join(formula_names)
                 )
         if LIST_RECORDS:
             echo('\n'.join(['  F320:%s' % f.formula for f in formulas.values()]))
@@ -654,6 +654,11 @@ def handle_product_ingredient(method):
             fnx_pd_ingredient.error('FIS Order F322:%s already exists in OpenERP' % (full_name, ))
             continue
         added_count += 1
+        logger.info(
+                'F322:%s -- adding -- %s',
+                full_name,
+                (', '.join(['%s=%r' % (k, v) for k, v in ingredient.items()]))
+                )
         if LIST_RECORDS:
             echo('  F322:%s' % full_name, end='  ')
             print(','.join(['%s=%r' % (k, v) for k, v in ingredient.items()]), end='', verbose=2)
@@ -673,6 +678,10 @@ def handle_product_ingredient(method):
                 )])
     if ingredients:
         deleted_count = len(ingredients)
+        logger.info(
+                'F322 -- removing -- %s',
+                ', '.join(ingredient_names)
+                )
         if LIST_RECORDS:
             echo('\n'.join(['  F322:%s' % i.name for i in ingredients.values()]))
         if not DRYRUN:
@@ -692,10 +701,15 @@ def handle_product_ingredient(method):
         for rec in records:
             oe_ids.append(all_oe_records[rec.name].id)
         changed_count += len(oe_ids)
+        logger.info(
+                'F322: changing -- %s  -->  %s',
+                ingredients,
+                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes))
+                )
         if LIST_RECORDS:
             body = []
             for i in records:
-                body.append(('  F135:%s' % (i.name, )))
+                body.append(('  F322:%s' % (i.name, )))
             if script_verbosity > 1:
                 body.append('---')
                 body.append(str(AttrDict(changes)))
@@ -940,10 +954,15 @@ def handle_production_order(method):
                 fnx_pd_order.read(domain=[('order_no','in',order_nos)], fields=['id','order_no'])
                 ])
         changed_count += len(oe_ids)
+        logger.info(
+                'F328: changing -- %s  -->  %s',
+                order_nos,
+                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes))
+                )
         if LIST_RECORDS:
             body = []
             for rec in records:
-                body.append(('  F135:%s' % (rec.order_no, )))
+                body.append(('  F328:%s' % (rec.order_no, )))
             if script_verbosity > 1:
                 body.append('---')
                 body.append(str(AttrDict(changes)))
@@ -962,6 +981,11 @@ def handle_production_order(method):
         if cutoff < order.schedule_date:
             continue
         added_count += 1
+        logger.info(
+                'F328:%s -- adding -- %s',
+                order_no,
+                (', '.join(['%s=%r' % (k, v) for k, v in order.items()]))
+                )
         if LIST_RECORDS:
             echo('  F328:%s' % order_no, end='  ')
             print(','.join(['%s=%r' % (k, v) for k, v in order.items()]), end='', verbose=2)
@@ -976,6 +1000,10 @@ def handle_production_order(method):
     orders = dict([(o.id, o) for o in all_oe_records.values() if o.order_no in deleted_records])
     if orders:
         deleted_count = len(orders)
+        logger.info(
+                'F328 -- removing -- %s',
+                ', '.join(order_nos)
+                )
         if LIST_RECORDS:
             echo('\n'.join(['  F328:%s' % o.order_no for o in orders.values()]))
         if not DRYRUN:
@@ -1220,6 +1248,11 @@ def handle_production_detail(method):
             continue
         added_count += 1
         ingredient.order_ids = [(6, 0, ingredient.order_ids)]
+        logger.info(
+                'F329:%s -- adding -- %s',
+                name,
+                (', '.join(['%s=%r' % (k, v) for k, v in ingredient.items()]))
+                )
         if LIST_RECORDS:
             echo('  F329:%s' % name, end='  ')
             print(','.join(['%s=%r' % (k, v) for k, v in ingredient.items()]), end='', verbose=2)
@@ -1237,6 +1270,10 @@ def handle_production_detail(method):
         ])
     if missing_ingredients:
         deleted_count = len(missing_ingredients)
+        logger.info(
+                'F329 -- removing -- %s',
+                ', '.join(missing_ingredients.keys())
+                )
         if LIST_RECORDS:
             echo('\n'.join(['  F329:%s' % i.name for i in missing_ingredients.values()]))
         if not DRYRUN:
@@ -1258,10 +1295,15 @@ def handle_production_detail(method):
         names = [o.name for o in records]
         assert len(oe_ids)
         changed_count += len(oe_ids)
+        logger.info(
+                'F329: changing -- %s  -->  %s',
+                names,
+                ', '.join("%s=%r" % (k, v) for k, v in sorted(changes))
+                )
         if LIST_RECORDS:
             body = []
             for i in records:
-                body.append(('  F135:%s' % (i.name, )))
+                body.append(('  F329:%s' % (i.name, )))
             if script_verbosity > 1:
                 body.append('---')
                 body.append(str(values))
@@ -1289,7 +1331,7 @@ def handle_qall(*files):
         else:
             echo(today.strftime('no QALL file found for %Y-%m-%d'), border='box')
             return
-    product_orders = Model(oe.get_model('fnx.pd.order'), 'nvty', 'F135', context, RAISE_ON_EXCEPTION)
+    product_orders = Model(oe.get_model('fnx.pd.order'), 'ifpp0', 'F328', context, RAISE_ON_EXCEPTION)
     # variables used
     added_records = {}
     old_changed_records = {}
