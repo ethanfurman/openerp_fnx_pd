@@ -1486,7 +1486,7 @@ def convert_ifms_rec(fis_rec):
     formula = AttrDict()
     formula.name = name = fis_rec[F320.formula_id]
     formula.formula = '%s-%s' % (name, fis_rec[F320.rev_no])
-    formula.description = fis_rec[F320.desc]
+    formula.description = fis_rec[F320.desc] or False
     formula.coating = fis_rec[F320.coating] or False
     formula.allergens = fis_rec[F320.allergens] or False
     return formula
