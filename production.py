@@ -14,6 +14,10 @@ _logger = logging.getLogger(__name__)
 
 
 class fnx_pd_ingredient(osv.Model):
+    """
+    ingredients have a m2m with orders because a single order can be split into
+    multiple steps and each ingredient should be listed with each step
+    """
     _name = 'fnx.pd.ingredient' # (F329) ingredients actually used in the Production Sales Order
     _order = 'sequence'
     _rec_name = 'item_id'
@@ -94,8 +98,11 @@ class fnx_pd_ingredient(osv.Model):
 
 
 class fnx_pd_order(osv.Model):
-    "production order" # (F328)  Production Sales Order
-    _name = 'fnx.pd.order'
+    """
+    orders have a m2m with ingredients because a single order can be split into
+    multiple steps and each ingredient should be listed with each step
+    """
+    _name = 'fnx.pd.order' # (F328)  Production Sales Order
     _description = 'production order'
     _inherit = ['mail.thread']
     _order = 'order_no'
@@ -210,7 +217,7 @@ class fnx_pd_order(osv.Model):
             sort_order='definition',
             ),
         'order_no': fields.char('Order #', size=12, required=True, track_visibility='onchange'),
-        'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange'),
+        'item_id': fields.many2one('product.product', 'Item', track_visibility='onchange', help='item being produced'),
         'ordered_qty': fields.float('Requested Qty', track_visibility='onchange', oldname='qty'),
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
         'line_id_set': fields.boolean('Line Locked', help='if True, nightly script will not update this field'),
