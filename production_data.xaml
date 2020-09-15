@@ -19,6 +19,13 @@
             @sequence eval='11'
             @description: Production order scheduled.
 
+        ~record model='mail.message.subtype' #mt_fnx_pd_released
+            @name: Released
+            @res_model: fnx.pd.order
+            @default eval='False'
+            @sequence eval='21'
+            @description: Production order released to floor.
+
         ~record model='mail.message.subtype' #mt_fnx_pd_running
             @name: Running
             @res_model: fnx.pd.order
