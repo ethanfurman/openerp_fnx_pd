@@ -35,6 +35,7 @@ class fnx_pd_ingredient(osv.Model):
     _columns = {
         'name': fields.char('Name', size=19, required=True),  # 'order:item'  (12:6)  (+6 due to order_step_total)
         'sequence': fields.integer('Sequence'),
+        # order_ids is M2M because a single order can be produced over several production lines
         'order_ids': fields.many2many(
             'fnx.pd.order',
             'order2ingredients_rel', 'ingredient_id', 'order_id',
@@ -69,7 +70,7 @@ class fnx_pd_ingredient(osv.Model):
             string='Run date',
             type='date',
             ),
-        'item_id': fields.many2one('product.product', 'Ingredient', required=True),
+        'item_id': fields.many2one('product.product', 'Ingredient', required=True, help='raw ingredient in product table'),
         'qty_needed': fields.float('Qty Needed'),
         'qty_desc': fields.char('Qty Unit', size=8),
         'qty_needed_desc': fields.function(
@@ -242,6 +243,7 @@ class fnx_pd_order(osv.Model):
         'formula_code': fields.char('Formula & Rev', size=64),
         'coating': fields.char('Coating', size=10, track_visibility='onchange'),
         'allergens': fields.char('Allergens', size=10, track_visibility='onchange'),
+        'batches': fields.integer('Batches needed', track_visibility='onchange'),
         'ingredient_ids': fields.many2many(
             'fnx.pd.ingredient',
             'order2ingredients_rel', 'order_id', 'ingredient_id',
@@ -512,7 +514,7 @@ class production_line(osv.Model):
 
 
 class production_line_map(osv.Model):
-    "mapping from alpha code  to multiple lines, e.g. GB -> 05, 01"
+    "mapping from alpha code to multiple lines, e.g. GB -> 05, 01"
     _name = "fnx.pd.multiline"
     _rec_name = 'key'
 
@@ -555,6 +557,7 @@ class production_line_map_entry(osv.Model):
         'sequence': fields.integer('Sequence', help='allows drag-n-drop ordering; actual value is irrelevent'),
         'name': fields.related('line_id', 'name', string='Name', type='char', size=40),
         }
+
 
 class pd_order_clean(osv.TransientModel):
     _name = 'fnx.pd.order.clean'
