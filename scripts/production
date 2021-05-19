@@ -2,6 +2,7 @@
 # imports
 from __future__ import print_function
 
+from aenum import IntEnum
 from antipathy import Path
 import sys
 
@@ -9,8 +10,9 @@ import email
 import os
 import shutil
 import time
+from collections import defaultdict
 from dbf import Date, Time, DateTime
-from openerplib import AttrDict, get_connection, get_records
+from openerplib import AttrDict, get_connection, get_records, Many2One, Query
 from openerplib.dates import LOCAL_TIME, date_to_str, datetime_to_str
 from scription import *
 from updates.fis_schema import F135, F320, F328, F329
@@ -18,6 +20,8 @@ from VSS.constants import IndexEnum, Weekday
 from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
+from VSS.finance import FederalHoliday
+from tools import combine_by_value, Model
 from traceback import format_exception
 from xmlrpclib import Fault
 
@@ -44,10 +48,51 @@ The following errors were detected during nightly processing:
 %s
 """
 
+C = Color
+grey = C.Dim | C.FG_White
+white = C.Normal | C.FG_White
+same = C.Normal | C.FG_White
+oldv = C.Normal | C.FG_Red
+newv = C.Normal | C.FG_Green
+
+QAll_C = IntEnum(
+    'QAll_C',
+    'HEADER EMAIL DEPT PROD_LINE TYPE ITEM_CODE ITEM_DESC ORDER_NUM CONFIRMED QTY DATE DAY COATING ALLERGENS'.split(),
+    start=0,
+    )
+HEADER, EMAIL, DEPT, PROD_LINE, TYPE, ITEM_CODE, ITEM_DESC, \
+    ORDER_NUM, CONFIRMED, QTY, DATE, DAY, COATING, ALLERGENS = QAll_C
+
+
 
 # API
 
-global OE
+@Script(
+        dryrun=Spec('do not make changes, only show what changes would be made', FLAG),
+        list_records=Spec('list added/changed records', FLAG),
+        raise_on_exception=Spec('do not ignore exceptions', FLAG, abbrev=('r', 'raise')),
+        )
+def main(dryrun, list_records, raise_on_exception):
+    global config, oe, errors, DRYRUN, LIST_RECORDS, RAISE_ON_EXCEPTION, VIEW_TYPE, BORDER, script_verbosity, today, cutoff
+    DRYRUN = LIST_RECORDS = False
+    config = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], types={'_path': Path})
+    oe = config.openerp
+    oe = get_connection(hostname=oe.host, database=oe.db, login=oe.user, password=oe.pw)
+    errors = defaultdict(list)
+    if dryrun:
+        DRYRUN = True
+        if not script_verbosity:
+            script_verbosity = 1
+    if list_records:
+        LIST_RECORDS = True
+        if not script_verbosity:
+            script_verbosity = 1
+    RAISE_ON_EXCEPTION = raise_on_exception
+    VIEW_TYPE = 'none' if LIST_RECORDS else 'percent'
+    BORDER = 'box' if LIST_RECORDS and script_verbosity > 1 else None
+    today = Date.today()
+    cutoff = FederalHoliday.next_business_day(today, 15)
+
 
 @Command(
         table=Spec('which table to update', REQUIRED, choices=['product','production']),
@@ -64,7 +109,7 @@ def manual_update(table, ids, **values):
                 break
             except ValueError:
                 pass
-    table = OE.conn.get_model({'product':'product.product', 'production':'fnx_pd.production'}[table])
+    table = oe.conn.get_model({'product':'product.product', 'production':'fnx_pd.production'}[table])
     table.write(ids, values)
 
 @Command(
@@ -79,30 +124,30 @@ def process(file_to_process='', order='', dryrun=False):
     else:
         files = [f for f in get_files() if f.ext == '.xls']
     connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
-    OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
-    OE.fnx_pd_ingredient = OE.conn.get_model('fnx.pd.ingredient')
-    OE.product = OE.conn.get_model('product.product')
+    oe.fnx_pd_order = oe.conn.get_model('fnx.pd.order')
+    oe.fnx_pd_ingredient = oe.conn.get_model('fnx.pd.ingredient')
+    oe.product = oe.conn.get_model('product.product')
     print('getting inventory...')
-    OE.inventory = dict([
+    oe.inventory = dict([
         (r.xml_id, r.id)
         for r in get_records(
-                OE.conn,
+                oe.conn,
                 'product.product',
                 fields=['id', 'xml_id'],
                 domain=[('module','=','F135')],
                 )])
     print('getting orders...')
-    OE.orders = dict([
+    oe.orders = dict([
         (r.order_no, r)
         for r in get_records(
-                OE.conn,
+                oe.conn,
                 'fnx.pd.order',
                 )])
     print('getting ingredients...')
-    OE.ingredients = dict([
+    oe.ingredients = dict([
         (r.name, r)
         for r in get_records(
-                OE.conn,
+                oe.conn,
                 'fnx.pd.ingredient',
                 fields=['id', 'name', 'order_id', 'order_no', 'item_id', 'qty_needed', 'qty_desc'],
                 )])
@@ -116,17 +161,17 @@ def process(file_to_process='', order='', dryrun=False):
                 # do not send mail from test machines nor during dry runs
                 abort('errors during processing')
             [fnxpd_manager] = get_records(
-                    OE.conn,
+                    oe.conn,
                     'ir.model.data',
                     domain=[('module','=','fnx_pd'),('model','=','res.groups'),('name','=','group_fnx_pd_manager')],
                     )
             [fnxpd_manager_group] = get_records(
-                    OE.conn,
+                    oe.conn,
                     'res.groups',
                     domain=[('id','=',fnxpd_manager.res_id)],
                     )
             managers = get_records(
-                    OE.conn,
+                    oe.conn,
                     'res.users',
                     domain=[('id','in',fnxpd_manager_group.users)],
                     fields=['id','login','email'],
@@ -156,8 +201,153 @@ def process(file_to_process='', order='', dryrun=False):
 def open_orders(dryrun=False):
     "check open orders and close if necessary"
     connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
-    OE.fnx_pd_order = OE.conn.get_model('fnx.pd.order')
+    oe.fnx_pd_order = oe.conn.get_model('fnx.pd.order')
     check_open_orders(dryrun=dryrun)
+
+@Command(
+        order_no=Spec('fix absent/wrong order number', FLAG),
+        )
+def repair(order_no):
+    "fix broken orders"
+    fix_order_no = order_no
+    connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    # following list will grow over time; if no flags are set attempt
+    # to fix all possible problems
+    if not any (fix_order_no, ):
+        fix_order_no = True
+    # get all order ingredients
+    fnx_pd_order = oe.con.get_model('fnx.pd.order')
+    orders = dict(
+            (r.order_no, r.id)
+            for r in fnx_pd_order.read([('id','!=',0)])
+            )
+    fnx_pd_ingredient = oe.con.get_model('fnx.pd.ingredient')
+    ingredients = fnx_pd_ingredient.read([('id','!=',0)])
+    for ingred in ingredients:
+        if fix_order_no and not ingred.order_no:
+            # FIXME
+            pass
+            orders
+
+@Command(
+        old=('file with older order information', ),
+        new=('file with newer order information', ),
+        order=('individual orders to check', MULTI),
+        )
+def diff(old, new, order):
+    old_qall = convert_spreadsheet(old)
+    new_qall = convert_spreadsheet(new)
+    new_orders = dead_orders = changed_orders = 0
+    for i, order_no in enumerate(sorted(set(old_qall.keys() + new_qall.keys()))):
+        if order and order_no not in order:
+            continue
+        old_order = old_qall.get(order_no)
+        new_order = new_qall.get(order_no)
+        if old_order == new_order:
+            continue
+        elif new_order is None:
+            dead_orders += 1
+            print('deleted order: %s' % order_no)
+            continue
+        elif old_order is None:
+            new_orders += 1
+            print('new order: %s' % order_no)
+            continue
+        changed_orders += 1
+        print('changes in order: %s' % order_no)
+        for field in ('user','dept','line','item','desc','conf','qty','date','day','coating','allergens'):
+            if old_order[field] != new_order[field]:
+                print('   %s:  %-50s  -->  %s' % (field, old_order[field], new_order[field]))
+    print('total orders: %r\ndeleted orders: %r\nnew orders: %r\nchanged orders: %r'
+            % (i, dead_orders, new_orders, changed_orders), border='box')
+
+
+@Command(
+        purge=('remove found duplicates', FLAG),
+        )
+def duplicates(purge):
+    "find duplicate order numbers"
+    config = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], types={'_path': Path})
+    oe = config.openerp
+    oe = get_connection(hostname=oe.host, database=oe.db, login=oe.user, password=oe.pw)
+    fnx_pd_order = oe.get_model('fnx.pd.order')
+    all_orders = {}
+    for rec in get_records(
+            fnx_pd_order,
+            domain=[('order_no','!=','CLEAN')],
+            fields=['id', 'order_no', 'state', 'item_id', 'line_id', 'schedule_date'],
+        ):
+        all_orders.setdefault(rec.order_no, []).append(rec)
+    last_order = None
+    processed = set()
+    to_be_purged = set()
+    check_for_purge = dict()
+    for order_no, orders in sorted(all_orders.items()):
+        found_old = False
+        if len(order_no) > 6 and order_no[:6] not in processed:
+            processed.add(order_no[:6])
+            # check for old 6-digit order
+            old_order = all_orders.get(order_no[:6])
+            if old_order is not None:
+                found_old = True
+                [old_order] = old_order
+                to_be_purged.add(old_order.id)
+        if found_old:
+            if order_no[:6] != last_order:
+                echo()
+                last_order = order_no[:6]
+            echo('%s\n------------' % order_no[:6])
+            echo('   %-60s  %-30s  %10s  %s'
+                    % (old_order.item_id[1], old_order.line_id[1], old_order.schedule_date, old_order.state)
+                    )
+        if len(orders) < 2:
+            continue
+        if order_no[:6] != last_order:
+            echo()
+            last_order = order_no[:6]
+        echo('%s\n------------' % order_no)
+        for order in orders:
+            check_for_purge.setdefault(order_no, []).append(order)
+            echo('   %-60s  %-30s  %10s  %s'
+                    % (order.item_id[1], order.line_id[1], order.schedule_date, order.state)
+                    )
+    echo()
+    if purge:
+        # compare orders in check_for_purge against FIS tables to determine which to keep
+        # and which to delete
+        ifpp = fisData(328, subset='10%s')
+        line_ids = {}
+        oe_production_lines = {}
+        for line in get_records(
+                oe,
+                'fis_integration.production_line',
+                fields=['id','xml_id','name'],
+            ):
+            line_ids[line.id] = line
+            oe_production_lines[line.xml_id] = [Many2One(line.id, line.name)]
+        for multiline in get_records(
+                oe,
+                'fnx.pd.multiline',
+                fields=['key', 'line_ids'],
+            ):
+            lines = []
+            for ml in multiline.line_ids:
+                lines.append(Many2One(ml, line_ids[ml].name))
+            oe_production_lines[multiline.key] = lines
+        for oe_order_no, oe_orders in sorted(check_for_purge.items()):
+            fis_order_no = oe_order_no[:6]
+            [key_rec] = ifpp.get_subset(fis_order_no)
+            fis_order = key_rec[1]
+            multiline = oe_production_lines[fis_order[F328.prod_line]]
+            step = int(oe_order_no[7])
+            index = step - 1
+            correct_line = multiline[index]
+            for oe_order in oe_orders:
+                if oe_order.line_id != correct_line:
+                    to_be_purged.add(oe_order.id)
+        fnx_pd_order.unlink(tuple(to_be_purged))
+        echo('%d orders removed' % len(to_be_purged))
+
 
 # helpers
 
@@ -245,11 +435,11 @@ def archive(src_file, dest=ARCHIVE):
     shutil.move(src_file, dst_file)
 
 def connect(hostname, database, user, password):
-    global OE
-    OE = AttrDict()
+    global oe
+    oe = AttrDict()
     print('connecting to %s:%s' % (hostname, database))
-    OE.conn = get_connection(hostname=hostname, database=database, login=user, password=password)
-    return OE
+    oe.conn = get_connection(hostname=hostname, database=database, login=user, password=password)
+    return oe
 
 def get_files(source=SOURCE):
     files = [source/f for f in source.listdir() if f != 'order_template']
@@ -278,19 +468,19 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
     imported_orders = []
     line_ids = dict(
             (r.xml_id, r) for r in get_records(
-                OE.conn,
+                oe.conn,
                 'fis_integration.production_line',
                 fields=['id','xml_id'],
             ))
     today = Date.today()
     # get current orders and construct a dict of (schedule_date, min(sequence))
-    multilines = dict([(r.key, r.line_ids) for r in get_records(OE.conn, 'fnx.pd.multiline', fields=['key', 'line_ids'])])
+    multilines = dict([(r.key, r.line_ids) for r in get_records(oe.conn, 'fnx.pd.multiline', fields=['key', 'line_ids'])])
     multistep = {}
     for key, multiline in multilines.items():
-        lines = get_records(OE.conn, 'fnx.pd.multiline.entry', ids=multiline, fields=['line_id'])
+        lines = get_records(oe.conn, 'fnx.pd.multiline.entry', ids=multiline, fields=['line_id'])
         ids = [l.line_id[0] for l in lines]
         sequence = [(i, l.line_id[0]) for i, l in enumerate(lines)]
-        xml_ids_map = dict([(x.id, x) for x in get_records(OE.conn, 'fis_integration.production_line', ids=ids, fields=['xml_id'])])
+        xml_ids_map = dict([(x.id, x) for x in get_records(oe.conn, 'fis_integration.production_line', ids=ids, fields=['xml_id'])])
         xml_ids = []
         for seq, xid in sequence:
             xml_ids.append(xml_ids_map[xid])
@@ -323,7 +513,7 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                 if only_order_no and order_num != only_order_no:
                     continue
                 print('  processing row %d, order %s' % (i, order_num), verbose=2)
-                item = OE.inventory.get(row[Q.ITEM_CODE])
+                item = oe.inventory.get(row[Q.ITEM_CODE])
                 if not item:
                     # couldn't find the product, record the error
                     errors.append(
@@ -378,7 +568,7 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                     if steps > 1:
                         data.order_no += '-%d_%d' % (step, steps)
                     print('    data.order_no:', data.order_no, verbose=2)
-                    current_oe_order = OE.orders.get(data.order_no)
+                    current_oe_order = oe.orders.get(data.order_no)
                     if current_oe_order:
                         if 'state' not in current_oe_order:
                             error('missing state field')
@@ -437,12 +627,12 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                                     print('deleting %s: Saturday schedule' % order_num, verbose=2)
                                     if not dryrun:
-                                        OE.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
+                                        oe.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
                                     continue
                                 elif (sched_date - today).days > 21:
                                     print('deleting %s: more than three weeks out' % order_num, verbose=2)
                                     if not dryrun:
-                                        OE.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
+                                        oe.fnx_pd_order.unlink(current_oe_order.id, context={'script': True})
                                     continue
                             print('updating %s' % row[Q.ORDER_NUM], verbose=2)
                             for key in data:
@@ -454,15 +644,15 @@ def import_spreadsheet(file_name, only_order_no, dryrun):
                                 else:
                                     print('  oops, forgot to delete key', key, verbose=2)
                             if not dryrun:
-                                OE.fnx_pd_order.write(current_oe_order.id, dict(data), context={'script': True})
+                                oe.fnx_pd_order.write(current_oe_order.id, dict(data), context={'script': True})
                     elif sched_date and Weekday.from_date(sched_date) is Weekday.SATURDAY:
                         print('skipping %s: Saturday schedule' % order_num, verbose=2)
                         continue
                     else:
                         if not dryrun:
                             print('creating %s' % row[Q.ORDER_NUM], 'with:\n', data, verbose=2)
-                            order_id = OE.fnx_pd_order.create(dict(data), context={'script': True})
-                            OE.orders[order_num] = AttrDict(id=order_id)
+                            order_id = oe.fnx_pd_order.create(dict(data), context={'script': True})
+                            oe.orders[order_num] = AttrDict(id=order_id)
                             update_formula(order_num, data, errors)
             except Exception:
                 lines = format_exception(*sys.exc_info())
@@ -476,7 +666,7 @@ def check_open_orders(ignore=(), dryrun=False):
     fis_f328 = fisData(328, keymatch='10%s000010000')
     today = Date.today()
     oe_open_orders = get_records(
-            OE.conn,
+            oe.conn,
             'fnx.pd.order',
             fields=['id', 'completed_fis_qty', 'order_no', 'schedule_date', 'state'],
             domain=[('order_no','not in',ignore),('state','not in',['complete','cancelled'])],
@@ -492,7 +682,7 @@ def check_open_orders(ignore=(), dryrun=False):
             # no longer present, delete
             print('deleting missing order: %s' % open_order.order_no, verbose=2)
             if not dryrun:
-                OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+                oe.fnx_pd_order.unlink(open_order.id, context={'script': True})
             continue
         else:
             status = fis_row[F328.produced]
@@ -501,12 +691,12 @@ def check_open_orders(ignore=(), dryrun=False):
                 if Weekday.from_date(sched_date) is Weekday.SATURDAY:
                     print('deleting %s: Saturday schedule' % open_order.order_no, verbose=2)
                     if not dryrun:
-                        OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+                        oe.fnx_pd_order.unlink(open_order.id, context={'script': True})
                     continue
                 elif (sched_date - today).days > 21:
                     print('deleting %s: more than three weeks out' % open_order.order_no, verbose=2)
                     if not dryrun:
-                        OE.fnx_pd_order.unlink(open_order.id, context={'script': True})
+                        oe.fnx_pd_order.unlink(open_order.id, context={'script': True})
                     continue
                 data.schedule_date = str(sched_date)
             print('  using %r' % sched_date, end=' . . . ', verbose=2)
@@ -537,7 +727,7 @@ def check_open_orders(ignore=(), dryrun=False):
         if data:
             print('updating with: %s' % (dict(data), ), verbose=2)
             if not dryrun:
-                OE.fnx_pd_order.write([open_order.id], dict(data), context={'script': True})
+                oe.fnx_pd_order.write([open_order.id], dict(data), context={'script': True})
         else:
             print()
 
@@ -555,35 +745,35 @@ def update_formula(order_num, data, errors):
     for item_xml_id, key, rec, _ in ingreds:
         if item_xml_id == target_item:
             continue
-        item_id = OE.inventory.get(item_xml_id)
+        item_id = oe.inventory.get(item_xml_id)
         print('        item id: %r' % (item_id, ), verbose=2)
         print('        item xml id: %r' % (item_xml_id, ), verbose=2)
         if item_id is None:
             try:
-                item_id = OE.product.search([('xml_id','=',item_xml_id)])[0]
+                item_id = oe.product.search([('xml_id','=',item_xml_id)])[0]
             except IndexError:
                 print('item %r not found' % (item_xml_id, ), verbose=2)
                 errors.append('unable to find ingredient %r in order %s' % (item_xml_id, order_num))
-                OE.fnx_pd_ingredient.unlink(ingreds_ids)
+                oe.fnx_pd_ingredient.unlink(ingreds_ids)
                 ingreds_ids = []
                 break
         qty = rec[F329.qty_batch_1]
         um = rec[F329.units_batch_1]
         name = '%s:%s' % (order_num, item_xml_id)
         print('        name:', name, verbose=2)
-        ingred = OE.ingredients.get(name)
+        ingred = oe.ingredients.get(name)
         if ingred is None:
             try:
                 ingred_values = AttrDict(
                         name=name,
-                        order_id=OE.orders[order_num].id,
+                        order_id=oe.orders[order_num].id,
                         item_id=item_id,
                         qty_needed=qty,
                         qty_desc=um,
                         )
-                ingred_values.id = OE.fnx_pd_ingredient.create(dict(ingred_values))
+                ingred_values.id = oe.fnx_pd_ingredient.create(dict(ingred_values))
                 ingred_values.order_no = order_num
-                OE.ingredients[name] = ingred_values
+                oe.ingredients[name] = ingred_values
                 ingreds_ids.append(ingred_values.id)
             except Fault as exc:
                 error('error creating %r --> %s' % (name, exc.faultCode.replace('\n\n', ':  ')))
@@ -591,8 +781,8 @@ def update_formula(order_num, data, errors):
         else:
             # check that the important bits match
             ingredient = AttrDict()
-            if ingred.order_id != OE.orders[order_num].id:
-                ingredient.order_id = OE.orders[order_num].id
+            if ingred.order_id != oe.orders[order_num].id:
+                ingredient.order_id = oe.orders[order_num].id
             if ingred.item_id != item_id:
                 ingredient.item_id = item_id
             if ingred.qty_needed != qty:
@@ -600,15 +790,15 @@ def update_formula(order_num, data, errors):
             if ingred.qty_desc != um:
                 ingredient.qty_desc = um
             if ingredient:
-                OE.fnx_pd_ingredient.write(ingred.id, dict(ingredient))
+                oe.fnx_pd_ingredient.write(ingred.id, dict(ingredient))
             ingreds_ids.append(ingred.id)
     remove_ingreds_ids = [
             i.id
-            for i in OE.ingredients.values()
+            for i in oe.ingredients.values()
             if i.order_no == order_num and i.id not in ingreds_ids
             ]
     if remove_ingreds_ids:
-        OE.fnx_pd_ingredient.unlink(remove_ingreds_ids)
+        oe.fnx_pd_ingredient.unlink(remove_ingreds_ids)
     if ingreds_ids:
         data.ingredient_ids = [(6, 0, ingreds_ids)]
     # add the formula details
@@ -640,6 +830,266 @@ def get_order_ingredients(order, food_only=False, include_null=True):
                     # net_un_wt > 0 means it's an item that contributes wght (food ingredient?)
                     foodlist.append((ingredient, key, rec, 0))
     return item, foodlist
+
+# from updates_production
+
+def handle_qall(*files):
+    print('processing QAll', border=('flag', '#'))
+    context = {'fis-updates': True, 'active_test': False}
+    if len(files) > 1:
+        abort('only one file can be specified (%r)' % (files, ))
+    if files:
+        [qall] = files
+    else:
+        # see if today's qall file exists
+        qall_files = sorted(config.network.qall_files.glob(today.strftime('%Y-%m-%d_*')))
+        if qall_files:
+            qall = qall_files[-1]
+        else:
+            echo(today.strftime('no QALL file found for %Y-%m-%d'), border='box')
+            return
+    product_orders = Model(oe.get_model('fnx.pd.order'), 'ifpp0', 'F328', context, RAISE_ON_EXCEPTION)
+    # variables used
+    added_records = {}
+    old_changed_records = {}
+    new_changed_records = {}
+    deleted_records = {}
+    added_count = 0
+    deleted_count = 0
+    changed_count = 0
+    #
+    #
+    fis_orders = convert_spreadsheet(qall)
+    oe_orders = dict(
+        (r.order_no, r) for r in get_records(
+            oe,
+            'fnx.pd.order',
+            domain=[('state','in',['draft','sequenced','released','running','stopped'])],
+            fields=[
+                'state', 'order_no', 'item_id', 'ordered_qty', 'line_id', 'line_id_set', 'confirmed',
+                'schedule_date', 'schedule_date_set',
+                'dept', 'coating', 'allergens',
+                ],
+        ))
+    #
+    # rules for orders (failure means order is deleted from, or not entered into, OpenERP):
+    # - cannot be scheduled for Saturday
+    # - must be within three weeks of today (15 business days)
+    # - must be present in FIS
+    #
+    # rules for order state:
+    # - if state in FIS is
+    #   - Y --> complete
+    #   - X --> cancelled
+    #   - P, N, or Space --> no change
+    #   - anything else --> no change, and record invalid state
+    #
+    # trim any FIS orders that fail the first two criteria
+    for order_no, order in list(fis_orders.items()):
+        if order.day is Weekday.SATURDAY:
+            fis_orders.pop(order_no)
+        elif cutoff <= order.schedule_date:
+            fis_orders.pop(order_no)
+        # no longer need the day field
+        del order.day
+    #
+    # above oe_orders only has active orders; now check for inactive orders -- we do this
+    # so we don't try to add an existing order
+    #
+    for order in get_records(
+            oe,
+            'fnx.pd.order',
+            domain=[('order_no','in',[ono for ono in fis_orders if ono not in oe_orders])],
+            fields=[
+                'state', 'order_no', 'item_id', 'ordered_qty', 'line_id', 'line_id_set', 'confirmed',
+                'schedule_date', 'schedule_date_set',
+                'dept', 'coating', 'allergens',
+                ],
+            context={'active_test': False},
+        ):
+        oe_orders[order.order_no] = order
+    #
+    # get a list of all keys, and figure out whats new, what's old, and what's changed
+    #
+    for order_no in sorted(list(set(oe_orders.keys() + fis_orders.keys()))):
+        old_record = oe_orders.get(order_no)
+        new_record = fis_orders.get(order_no)
+        if old_record is None:
+            # add record
+            added_records[order_no] = new_record
+            continue
+        # if record is already done, ignore any changes
+        elif old_record.state in ('complete','cancelled'):
+            continue
+        elif new_record is None:
+            # remove record
+            deleted_records[order_no] = old_record
+            continue
+        # update fis record with OpenERP specific data (applies to both new and changed records)
+        new_record.id = old_record.id
+        new_record.state = old_record.state
+        new_record.line_id_set = old_record.line_id_set
+        new_record.schedule_date_set = old_record.schedule_date_set
+        if not new_record.confirmed:
+            new_record.confirmed = old_record.confirmed
+        if new_record.line_id_set:
+            new_record.line_id = old_record.line_id
+        if new_record.schedule_date_set:
+            new_record.schedule_date = old_record.schedule_date
+        if new_record == old_record:
+            # no changes, move on to next record
+            continue
+        new_changed_records[order_no] = new_record
+        old_changed_records[order_no] = old_record
+    #
+    # add new orders
+    #
+    for order_no, order in ProgressView(
+            iterable=sorted(added_records.items()),
+            message='adding new records',
+            view_type=VIEW_TYPE,
+        ):
+        added_count += 1
+        if LIST_RECORDS:
+            echo('  QALL:%-10s  %s' % (order.order_no, order.item_id.name))
+            print('     --> ', repr(order), verbose=2)
+            echo()
+        if not DRYRUN:
+            product_orders.create(order_no, order)
+    #
+    # process changes
+    #
+    changed_map = combine_by_value(old_changed_records, new_changed_records)
+    for changes, records in ProgressView(
+            iterable=sorted(changed_map.items()),
+            message='processing changed records',
+            view_type=VIEW_TYPE,
+        ):
+        values = dict(changes)
+        order_nos = [r.order_no for r in records]
+        oe_ids = [r.id for r in records]
+        changed_count += len(oe_ids)
+        if LIST_RECORDS:
+            body = []
+            for rec in records:
+                body.append(('  QALL:%-10s  %s' % (rec.order_no, rec.item_id.name)))
+            if script_verbosity > 1:
+                body.append('---')
+                body.append(str(AttrDict(changes)))
+            echo('\n'.join(body), border='box' if script_verbosity > 1 else None)
+        if not DRYRUN:
+            product_orders.write('|'.join(order_nos), oe_ids, values, context={})
+    #
+    # deleted/deactivate orders
+    #
+    for _ in ProgressView(
+            iterable=(True, ),
+            message='removing irrelevent records',
+            view_type=VIEW_TYPE,
+        ):
+        ## get the ids of actually existing records
+        ids = [rec.id for key, rec in deleted_records.items()]
+        if ids:
+            deleted_count = len(ids)
+            if deleted_count:
+                if LIST_RECORDS:
+                    for order_no, rec in sorted(deleted_records.items()):
+                        echo('  QALL:%-10s  %s' % (order_no, rec.item_id.name))
+                if not DRYRUN:
+                    product_orders.delete(ids, context=context)
+    #
+    print('%d orders changed\n%d orders added\n%d orders removed'
+            % (changed_count, added_count, deleted_count, ),
+            border='box',
+            )
+
+def convert_spreadsheet(file_name):
+    'convert records on 21-day tab into schedule records'
+    print('processing %s' % file_name)
+    #
+    # get spreadsheet data
+    #
+    orders = {}
+    sheet_data = []
+    with open_workbook(file_name) as work_book:
+        for sheet in work_book:
+            if sheet.name.lower() == '21 day production schedule':
+                break
+        else:
+            raise ValueError('Unable to find <21 Day Production Schedule> in %r' % file_name)
+        for i, row in enumerate(sheet.rows(start_row=1), start=1):
+            sheet_data.append(tuple([c.strip() for c in row]))
+    #
+    oe_products = dict([
+        (r.xml_id, Many2One(r.id, r.name))
+        for r in get_records(
+            oe, 'product.product',
+            domain=[('module','=','F135')],
+            fields=['id','xml_id','name'],
+            context={'active_test': False},
+        )])
+    line_ids = {}
+    oe_production_lines = {}
+    for line in get_records(
+            oe,
+            'fis_integration.production_line',
+            fields=['id','xml_id','name'],
+        ):
+        line_ids[line.id] = line
+        oe_production_lines[line.xml_id] = [Many2One(line.id, line.name)]
+    for multiline in Query(
+            oe.get_model('fnx.pd.multiline'),
+            fields=['id', 'key', 'line_ids/line_id'],
+        ):
+        lines = []
+        for ml in multiline.line_ids:
+            lines.append(ml.line_id)
+        oe_production_lines[multiline.key] = lines
+    #
+    print('%d lines in sheet' % (len(sheet_data), ))
+    for i, row in enumerate(sheet_data, start=2):
+        last_row = None
+        if row == last_row:
+            continue
+        try:
+            last_row = row
+            order = AttrDict()
+            # add order number and line id last, as this may be a multiline setup
+            id_num = row[ORDER_NUM]
+            print('  processing row %d, order %s' % (i, id_num), verbose=3)
+            # order.user = row[EMAIL]
+            order.dept = row[DEPT]
+            order.item_id = oe_products[row[ITEM_CODE]]
+            # order.desc= row[ITEM_DESC]
+            order.confirmed = (False, 'fis')[row[CONFIRMED] == 'Y']
+            order.ordered_qty = float(row[QTY].strip() or 0)
+            order.schedule_date = fix_date(row[DATE], format='ymd')
+            order.day = Weekday.from_abbr(row[DAY])
+            order.coating = row[COATING]
+            order.allergens = row[ALLERGENS]
+            #
+            line = row[PROD_LINE]
+            line = ('0' + line)[-2:]
+            lines = oe_production_lines[line]
+            if len(lines) == 1:
+                # simple case, just the one order step
+                [line] = lines
+                order.order_no = id_num
+                order.line_id = line
+                orders[id_num] = order
+            else:
+                # multiple steps: make a copy for each one
+                total = len(lines)
+                for i, line_step in enumerate(lines, start=1):
+                    num_step = "%s-%d_%d" % (id_num, i, total)
+                    order_step = order.copy()
+                    order_step.order_no = num_step
+                    order_step.line_id = line_step
+                    orders[num_step] = order_step
+        except Exception as exc:
+            error('unable to process row %d: %r\n%r' % (i, row, exc))
+            continue
+    return orders
 
 
 Main()
