@@ -70,7 +70,7 @@ class product_product(osv.Model):
         return product_ids
 
     def _get_item_formula(self, cr, uid, ids, field_name, args, context=None):
-        res = {}
+        res = {}.fromkeys(ids)
         product_map = dict([
                 (p['xml_id'], p['id'])
                 for p in self.read(
