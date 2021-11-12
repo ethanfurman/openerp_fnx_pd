@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime
+from fnx_fs.fields import files
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT
@@ -105,10 +106,13 @@ class fnx_pd_order(osv.Model):
     """
     _name = 'fnx.pd.order' # (F328)  Production Sales Order
     _description = 'production order'
-    _inherit = ['mail.thread']
+    _inherit = ['mail.thread', 'fnx_fs.fs']
     _order = 'order_no'
     _rec_name = 'order_no'
     _mail_flat_thread = False
+
+    _fnxfs_path = 'fnx_pd/order'
+    _fnxfs_path_fields = ['order_no']
 
     _track = {
         'state' : {
@@ -196,7 +200,11 @@ class fnx_pd_order(osv.Model):
         if isinstance(ids, (int, long)):
             ids = [ids]
         records = self.read(cr, uid, ids, fields=['order_no'])
-        order_nos = [rec['order_no'] for rec in records]
+        order_nos = [
+                rec['order_no']
+                for rec in records
+                if rec['order_no'] not in ('CLEAN', )
+                ]
         try:
             duplicates = self.search(cr, uid, [('order_no','in',order_nos),('id','not in',ids)])
         except Exception:
@@ -249,6 +257,7 @@ class fnx_pd_order(osv.Model):
             'order2ingredients_rel', 'order_id', 'ingredient_id',
             string='Ingredients',
             ),
+        'label_images': files('images', string='Markem Labels'),
         # status color
         'color': fields.function(
             _get_color,
