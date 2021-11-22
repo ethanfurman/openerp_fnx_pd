@@ -8,12 +8,15 @@ import sys
 
 import email
 import os
+import pwd
 import shutil
 import time
 from collections import defaultdict
 from dbf import Date, Time, DateTime
+from logging import INFO, getLogger, Formatter, handlers
 from openerplib import AttrDict, get_connection, get_records, Many2One, Query
 from openerplib.dates import LOCAL_TIME, date_to_str, datetime_to_str
+from pandaemonium import PidLockFile, AlreadyLocked
 from scription import *
 from updates.fis_schema import F135, F320, F328, F329
 from VSS.constants import IndexEnum, Weekday
@@ -21,15 +24,48 @@ from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from VSS.finance import FederalHoliday
-from tools import combine_by_value, Model
+# from tools import combine_by_value, Model
 from traceback import format_exception
 from xmlrpclib import Fault
 
 VIRTUAL_ENV = os.environ['VIRTUAL_ENV']
+logger = getLogger()
+logger.setLevel(INFO)
+_handler = handlers.TimedRotatingFileHandler(
+        '%s/var/log/fnx_pd.log' % VIRTUAL_ENV,
+        when='midnight',
+        backupCount=30,
+        )
+_formatter = Formatter('%(asctime)s %(funcName)-25s %(message)s')
+_handler.setFormatter(_formatter)
+logger.addHandler(_handler)
+del _handler, _formatter
+
 SOURCE = Path('%s/var/fis/production/' % VIRTUAL_ENV)
-ARCHIVE = Path('%s/var/openerp/archive/production/' % VIRTUAL_ENV)
-ERRORS = Path('%s/var/openerp/archive/production/error' % VIRTUAL_ENV)
-CONFIG = OrmFile('%s/config/fnx.ini' % VIRTUAL_ENV, section='openerp')
+ARCHIVE = Path('%s/var/openerp/archive/fnx_pd/' % VIRTUAL_ENV)
+ERRORS = Path('%s/var/openerp/archive/fnx_pd/error' % VIRTUAL_ENV)
+CONFIG = Path('%s/config/fnx.ini' % VIRTUAL_ENV)
+
+try:
+    OPENERP = tuple(pwd.getpwnam('openerp')[2:4])
+except KeyError:
+    OPENERP = None
+IS_ROOT = os.geteuid() == 0
+
+try:
+    settings = OrmFile(CONFIG, section='openerp')
+except Exception:
+    echo('WARNING: unable to process configfile; all parameters must be specified')
+    HOST = ''
+    USER = ''
+    DB = ''
+    PW = ''
+else:
+    HOST = settings.host
+    USER = settings.user
+    DB = settings.db
+    PW = settings.pw
+
 
 Q = QAll_C = IndexEnum(
     'QAll_C',
@@ -68,8 +104,8 @@ HEADER, EMAIL, DEPT, PROD_LINE, TYPE, ITEM_CODE, ITEM_DESC, \
 # API
 
 @Script(
-        dryrun=Spec('do not make changes, only show what changes would be made', FLAG),
-        list_records=Spec('list added/changed records', FLAG),
+        dryrun=Spec('do not make changes, only show what changes would be made', FLAG, None),
+        list_records=Spec('list added/changed records', FLAG, None),
         raise_on_exception=Spec('do not ignore exceptions', FLAG, abbrev=('r', 'raise')),
         )
 def main(dryrun, list_records, raise_on_exception):
@@ -77,6 +113,7 @@ def main(dryrun, list_records, raise_on_exception):
     DRYRUN = LIST_RECORDS = False
     config = OrmFile('%s/config/fnx.ini' % os.environ['VIRTUAL_ENV'], types={'_path': Path})
     oe = config.openerp
+    print('connecting to OpenERP')
     oe = get_connection(hostname=oe.host, database=oe.db, login=oe.user, password=oe.pw)
     errors = defaultdict(list)
     if dryrun:
@@ -100,7 +137,7 @@ def main(dryrun, list_records, raise_on_exception):
         values=Spec('settings to use', REQUIRED),
         )
 def manual_update(table, ids, **values):
-    connect(CONFIG.host, CONFIG.db, CONFIG.user, CONFIG.pw)
+    connect(HOST, DB, USER, PW)
     ids = [int(i) for i in ids.replace(',',' ').split()]
     for key, value in values.items():
         for t in (int, float):
@@ -117,7 +154,7 @@ def manual_update(table, ids, **values):
         order=('specific order number from file to process', ),
         dryrun=('do not update tables', FLAG),
         )
-def process(file_to_process='', order='', dryrun=False):
+def process_qall(file_to_process='', order='', dryrun=False):
     "imports a production spreadsheet into FnxPd"
     if file_to_process:
         files = [file_to_process]
@@ -349,7 +386,99 @@ def duplicates(purge):
         echo('%d orders removed' % len(to_be_purged))
 
 
+@Command(
+        file=('production order to add/update in system', OPTION, 'f', Path),
+        directory=('directory of production orders to add/update in system', OPTION, 'd', Path),
+        abort_on_error=Spec('abort on error', FLAG, 'a', usage='abort'),
+        )
+def update(file, directory=SOURCE, abort_on_error=False):
+    """
+    Use files with the structure of
+
+        order={
+          'line': '07',
+          'local_contact': ['sysadmin', 'rgiannini', 'ethan'],
+          }
+
+    to update OpenERP.FnxPD and set the status to 'Released to Floor'.
+    """
+    logger.info('update(file=%r, directory=%r', file, directory)
+    global fnxpd
+    fnxpd = oe.get_model('fnx.pd.order')
+    if file:
+        files = [file]
+        lock = None
+    else:
+        if not directory.exists():
+            abort('directory %s does not exist' % directory)
+        try:
+            lock = PidLockFile('/var/run/fnxpd-order_update.pid', timeout=30)
+            lock.seal()
+        except AlreadyLocked:
+            return
+        files = get_files(directory)
+        if not files:
+            lock.release()
+            return
+    try:
+        failures = False
+        bad_orders = []
+        for file in files:
+            try:
+                order = get_order(file)
+                logger.info(
+                        '%s: %s',
+                        file.name,
+                        ', '.join('%s=%r' % (k, v) for k, v in sorted(order.items()))
+                        )
+                update_order(order)
+                dest = ARCHIVE
+            except (BadFormat, MissingOrder) as exc:
+                if abort_on_error:
+                    raise
+                error('%s: %s %s' % (file, exc.__class__.__name__, exc.message or exc.args))
+                with open(file) as f:
+                    data = '================\n%s\n----------------\n' % file
+                    data += f.read() + '\n'
+                    bad_orders.append(data)
+                # failing.append('%s: %s' % (file, exc.message or exc.args))
+                dest = ERRORS
+                failures = True
+            except (Exception, ), exc:
+                if abort_on_error:
+                    raise
+                logger.exception('error processing %s', file)
+                error('%s: %s %s' % (file, exc.__class__.__name__, exc.message or exc.args))
+                # failing.append('%s: %s' % (file, exc.message or exc.args))
+                dest = None
+                failures = True
+                continue
+            if dest:
+                archive(file, dest)
+        if failures:
+            error('\n'.join(bad_orders))
+            raise SystemExit(-1)
+    finally:
+        if lock:
+            lock.release()
+
+
 # helpers
+
+class BadFormat(Exception):
+    "order is incomplete"
+
+class MissingOrder(Exception):
+    "unable to find order"
+
+class TooManyOrders(Exception):
+    "found too many orders"
+
+class CancelledOrder(Exception):
+    "order has been cancelled"
+
+class MissingFIS(Exception):
+    "unable to find document in FIS"
 
 fis_module = {
     'incoming': 'F163',
@@ -424,6 +553,8 @@ ignored_ingredients = set([
 def archive(src_file, dest=ARCHIVE):
     src_file = Path(src_file)
     basename = src_file.filename.split('_')[0]
+    if basename.startswith('PD-'):
+        basename = basename[3:]
     existing = dest.glob(basename+'*')
     existing.sort()
     if not existing or '_' not in existing[-1]:
@@ -433,6 +564,8 @@ def archive(src_file, dest=ARCHIVE):
         count = int(count) + 1
         dst_file += '_%02d' % count
     shutil.move(src_file, dst_file)
+    if IS_ROOT and OPENERP:
+        dst_file.chown(*OPENERP)
 
 def connect(hostname, database, user, password):
     global oe
@@ -442,7 +575,11 @@ def connect(hostname, database, user, password):
     return oe
 
 def get_files(source=SOURCE):
-    files = [source/f for f in source.listdir() if f != 'order_template']
+    files = [
+            source/f
+            for f in source.listdir()
+            if f.startswith('PD-')
+            ]
     files.sort(key=lambda f: f.stat().st_mtime)
     return files
 
@@ -807,7 +944,23 @@ def update_formula(order_num, data, errors):
     data.allergens = formula_header[F320.allergens]
 
 def update_order(values):
-    pass
+    # look up the order in values and update
+    order_segment = values.pop('order_no')
+    order = order_segment.split('-')[0]
+    line = values.pop('line_no')
+    records = fnxpd.search([('order_no','=like',order),('line_id','=',line)])
+    print('found:', records)
+    if not records:
+        raise MissingOrder(order_segment)
+    elif len(records) > 1:
+        error('too many records found:')
+        for r in records:
+            error(r)
+        raise TooManyOrders(order_segment)
+    else:
+        [id] = records
+        print('updating %r' % (id, ))
+        fnxpd.write(id, {'state': 'released'})
 
 def get_order_ingredients(order, food_only=False, include_null=True):
     # get the order record from 328
@@ -959,7 +1112,7 @@ def handle_qall(*files):
     #
     # process changes
     #
-    changed_map = combine_by_value(old_changed_records, new_changed_records)
+    # changed_map = combine_by_value(old_changed_records, new_changed_records)
     for changes, records in ProgressView(
             iterable=sorted(changed_map.items()),
             message='processing changed records',
