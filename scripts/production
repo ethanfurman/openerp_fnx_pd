@@ -396,13 +396,14 @@ def update(file, directory=SOURCE, abort_on_error=False):
     Use files with the structure of
 
         order={
-          'line': '07',
-          'local_contact': ['sysadmin', 'rgiannini', 'ethan'],
+          'line_no': '07',
+          # 'local_contact': ['sysadmin', 'rgiannini', 'ethan'],
           }
 
     to update OpenERP.FnxPD and set the status to 'Released to Floor'.
     """
     logger.info('update(file=%r, directory=%r', file, directory)
+    print('update(file=%r, directory=%r' % (file, directory))
     global fnxpd
     fnxpd = oe.get_model('fnx.pd.order')
     if file:
@@ -420,6 +421,7 @@ def update(file, directory=SOURCE, abort_on_error=False):
         if not files:
             lock.release()
             return
+    print('processing %s' % ', '.join([s.filename for s in files]))
     try:
         failures = False
         bad_orders = []
@@ -461,6 +463,7 @@ def update(file, directory=SOURCE, abort_on_error=False):
     finally:
         if lock:
             lock.release()
+    print('done.')
 
 
 # helpers
@@ -551,21 +554,23 @@ ignored_ingredients = set([
 
 
 def archive(src_file, dest=ARCHIVE):
+    print('archiving %r' % (src_file, ))
     src_file = Path(src_file)
     basename = src_file.filename.split('_')[0]
     if basename.startswith('PD-'):
         basename = basename[3:]
     existing = dest.glob(basename+'*')
     existing.sort()
+    print('found %r' % (existing, ))
     if not existing or '_' not in existing[-1]:
         dst_file = dest/basename + '_01'
     else:
-        dst_file, count = existing[-1].split('_')
+        dst_file, count = existing[-1].rsplit('_', 1)
         count = int(count) + 1
         dst_file += '_%02d' % count
     shutil.move(src_file, dst_file)
     if IS_ROOT and OPENERP:
-        dst_file.chown(*OPENERP)
+        Path(dst_file).chown(*OPENERP)
 
 def connect(hostname, database, user, password):
     global oe
@@ -586,7 +591,10 @@ def get_files(source=SOURCE):
 def get_order(order):
     g = {}
     execfile(order, g)
-    return AttrDict(g['order'])
+    result = AttrDict(g['order'])
+    if result.status in StatusCode:
+        result.status = StatusCode[result.status]
+    return result
 
 def import_spreadsheet(file_name, only_order_no, dryrun):
     '''
@@ -945,22 +953,16 @@ def update_formula(order_num, data, errors):
 
 def update_order(values):
     # look up the order in values and update
+    status = values.pop('status')
     order_segment = values.pop('order_no')
     order = order_segment.split('-')[0]
-    line = values.pop('line_no')
-    records = fnxpd.search([('order_no','=like',order),('line_id','=',line)])
-    print('found:', records)
-    if not records:
+    ids = fnxpd.search([('order_no','=like',order)])
+    print('found:', ids)
+    if not ids:
         raise MissingOrder(order_segment)
-    elif len(records) > 1:
-        error('too many records found:')
-        for r in records:
-            error(r)
-        raise TooManyOrders(order_segment)
     else:
-        [id] = records
-        print('updating %r' % (id, ))
-        fnxpd.write(id, {'state': 'released'})
+        print('updating %r' % (ids, ))
+        fnxpd.write(ids, {'state': status})
 
 def get_order_ingredients(order, food_only=False, include_null=True):
     # get the order record from 328
@@ -1244,5 +1246,15 @@ def convert_spreadsheet(file_name):
             continue
     return orders
 
+StatusCode = {
+        'New': 'draft',
+        'Scheduled': 'sequenced',
+        'Released': 'released',
+        'Running': 'running',
+        'Stopped': 'stopped',
+        'Complete': 'complete',
+        'Cancelled': 'cancelled',
+        }
 
-Main()
+with user_ids(0, 0):
+	Main()
