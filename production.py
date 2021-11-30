@@ -5,7 +5,7 @@ from datetime import datetime
 from fnx_fs.fields import files
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
-from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT
+from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, self_ids
 from dbf import DateTime
 from VSS.utils import float
 from fnx.oe import Proposed
@@ -184,6 +184,17 @@ class fnx_pd_order(osv.Model):
             res[record.id] = color
         return res
 
+    def _get_mark_prod_text(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        if not ids:
+            return res
+        for record in self.browse(cr, uid, ids, context=context):
+            if record.state in ('released','running','stopped'):
+                res[record.id] = '%s / %s' % (record.markem, record.line_id.name)
+            else:
+                res[record.id] = '%s' % (record.line_id.name, )
+        return res
+
     def _post_init(self, pool, cr):
         ids = self.search(cr, 1, [('color','=',False)])
         res = self._get_color(cr, 1, ids, 'color', None)
@@ -230,6 +241,17 @@ class fnx_pd_order(osv.Model):
         'ordered_qty': fields.float('Requested Qty', track_visibility='onchange', oldname='qty'),
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
         'line_id_set': fields.boolean('Line Locked', help='if True, nightly script will not update this field'),
+        'markem': fields.char('Markem line', size=32, readonly=True),
+        'mark_prod_line': fields.function(
+            _get_mark_prod_text,
+            string='Markem / Production Line',
+            size=128,
+            type='char',
+            store={
+                'fnx.pd.order': (self_ids, ['line_id','markem','state'], 10),
+                },
+            ),
+        'tracking_no': fields.char('Tracking #', size=32, readonly=True),
         'confirmed': fields.selection(
             [('fis', 'FIS'), ('user', 'OpenERP')],
             string='Supplies reserved by',

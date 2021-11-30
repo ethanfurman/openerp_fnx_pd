@@ -953,7 +953,6 @@ def update_formula(order_num, data, errors):
 
 def update_order(values):
     # look up the order in values and update
-    status = values.pop('status')
     order_segment = values.pop('order_no')
     order = order_segment.split('-')[0]
     ids = fnxpd.search([('order_no','=like',order)])
@@ -961,8 +960,8 @@ def update_order(values):
     if not ids:
         raise MissingOrder(order_segment)
     else:
-        print('updating %r' % (ids, ))
-        fnxpd.write(ids, {'state': status})
+        print('updating %r with %r' % (ids, values))
+        fnxpd.write(ids, values)
 
 def get_order_ingredients(order, food_only=False, include_null=True):
     # get the order record from 328

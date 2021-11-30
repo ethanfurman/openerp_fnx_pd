@@ -19,6 +19,7 @@
                     @color invisible='1'
                     @dept invisible='1'
                     @order_no
+                    @markem
                     @line_id
                     @item_id
                     @ordered_qty
@@ -41,9 +42,12 @@
                         ~div .oe_left
                             ~h1
                                 ~label for='order_no' $Order .oe_inline
-                                @order_no readonly='True' $Order .oe_inline
+                                @order_no readonly='True' .oe_inline
                             ~h2
-                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
+                                @item_id readonly='True' .oe_inline options="{'create':False, 'create_edit':False}"
+                            ~h3
+                                ~label for='tracking_no' string='Tracking #' .oe_inline
+                                @tracking_no readonly='True' .oe_inline attrs="{'invisible': [('state','not in',['released','running','stopped','complete','cancelled'])]}"
                         ~div .oe_right .oe_button_box @button_box
                             ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='sequenced' type='object'
                             ~button $Retract_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='released' type='object'
@@ -62,6 +66,7 @@
                                 @allergens
                             ~group
                                 @dept
+                                @markem attrs="{'invisible': [('state','not in',['released','running','stopped'])]}"
                                 @line_id
                                 @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                             ~group
@@ -334,6 +339,18 @@
                     ~notebook
                         ~page $Jobs
                             @order_ids nolabel='1'
+                                ~tree create='false' fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
+                                    @color invisible='1'
+                                    @dept invisible='1'
+                                    @order_no
+                                    @mark_prod_line
+                                    @item_id
+                                    @ordered_qty
+                                    @schedule_date
+                                    @confirmed invisible='1'
+                                    @allergens
+                                    @coating
+                                    @state
                                 ~form $Production_Orders version='7.0' create='false'
                                     ~header
                                         @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
@@ -432,7 +449,7 @@
             @view_id ref='fnx_pd_production_line_tree'
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
-            @context eval="{'fnx.pd.order_domain': [('state','!=','draft')]}"
+            @context eval="{'fnx.pd.order_domain': [('state','in',['running','stopped','released'])]}"
 
         ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_tree
             @sequence eval='20'
