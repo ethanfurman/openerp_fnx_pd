@@ -57,6 +57,7 @@ class fnx_pd_ingredient(osv.Model):
                 ('released', 'Released'),
                 ('running', 'Running'),
                 ('stopped', 'Stopped'),
+                ('produced', 'Produced'),
                 ('complete', 'Complete'),
                 ('cancelled', 'Cancelled'),
                 ]),
@@ -121,6 +122,7 @@ class fnx_pd_order(osv.Model):
             'fnx_pd.mt_fnx_pd_released': lambda s, c, u, r, ctx: r['state'] == 'released',
             'fnx_pd.mt_fnx_pd_running': lambda s, c, u, r, ctx: r['state'] == 'running',
             'fnx_pd.mt_fnx_pd_stopped': lambda s, c, u, r, ctx: r['state'] == 'stopped',
+            'fnx_pd.mt_fnx_pd_produced': lambda s, c, u, r, ctx: r['state'] == 'produced',
             'fnx_pd.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
             'fnx_pd.mt_fnx_pd_cancelled': lambda s, c, u, r, ctx: r['state'] == 'cancelled',
             }
@@ -162,6 +164,16 @@ class fnx_pd_order(osv.Model):
             state = record.state
             confirmed = record.confirmed
             sequence = record.sequence
+            color = None
+            if state in ('running','stopped','produced','complete'):
+                color = 'green'
+            elif (state == 'released' and confirmed):
+                color = 'green'
+            elif state == 'cancelled':
+                color = 'gray'
+            if color is not None:
+                res[record.id] = color
+                continue
             for ingredient in record.ingredient_ids:
                 if ingredient.qty_avail < ingredient.qty_needed:
                     out_of_stock = True
@@ -171,14 +183,10 @@ class fnx_pd_order(osv.Model):
             color = 'black'
             if out_of_stock and not confirmed:
                 color = 'red'
-            elif (state == 'released' and confirmed) or state in ['running', 'stopped', 'complete']:
-                color = 'green'
             elif state == 'draft' and confirmed:
                 color = 'orange'
             elif state == 'sequenced':
                 color = 'blue'
-            elif state in ['cancelled']:
-                color = 'gray'
             elif sequence == 0:
                 color = 'purple'
             res[record.id] = color

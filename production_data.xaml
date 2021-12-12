@@ -40,6 +40,13 @@
             @sequence eval='21'
             @description: Production stopped.
 
+        ~record model='mail.message.subtype' #mt_fnx_pd_produced
+            @name: Produced
+            @res_model: fnx.pd.order
+            @default eval='True'
+            @sequence eval='40'
+            @description: Order is complete.
+
         ~record model='mail.message.subtype' #mt_fnx_pd_complete
             @name: Complete
             @res_model: fnx.pd.order
