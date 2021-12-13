@@ -592,8 +592,10 @@ def get_order(order):
     g = {}
     execfile(order, g)
     result = AttrDict(g['order'])
-    if result.status in StatusCode:
-        result.status = StatusCode[result.status]
+    status = result.pop('status', None) or result.pop('state')
+    if status in StatusCode:
+        status = StatusCode[status]
+    result['state'] = status
     return result
 
 def import_spreadsheet(file_name, only_order_no, dryrun):
