@@ -287,7 +287,7 @@ class fnx_pd_order(osv.Model):
             'order2ingredients_rel', 'order_id', 'ingredient_id',
             string='Ingredients',
             ),
-        'label_images': files('images', string='Markem Labels', style='images'),
+        'label_images': files('images', string='Markem Labels', style='images', sort='oldest'),
         # status color
         'color': fields.function(
             _get_color,
