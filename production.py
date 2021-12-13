@@ -434,6 +434,17 @@ class fnx_pd_order(osv.Model):
         state = context.pop('new_state')
         return self.write(cr, uid, ids, {'state':state}, context=context)
 
+    def update_colors(self, cr, uid, context=None):
+        ids = self.search(cr, uid, [('id','!=',0)], context=context)
+        updated_colors = self._get_color(cr, uid, ids, None, None, context=context)
+        color_groups = defaultdict(list)
+        for id, color in updated_colors.items():
+            color_groups[color].append(id)
+        for color, ids in color_groups.items():
+            _logger.info('setting %d records to %r', len(ids), color)
+            self.write(cr, SUPERUSER_ID, ids, {'color': color}, context=context)
+        return True
+
 class fnx_pd_product_formula(osv.Model):
     "product formula information" # (F320) Formula Master File
     _name = 'fnx.pd.product.formula'
