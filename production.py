@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from collections import defaultdict
-from datetime import datetime
 from fnx_fs.fields import files
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
-from openerp.tools import DEFAULT_SERVER_TIME_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, self_ids
-from dbf import DateTime
-from VSS.utils import float
+from openerp.tools import self_ids
 from fnx.oe import Proposed
 import logging
 
@@ -120,39 +117,10 @@ class fnx_pd_order(osv.Model):
             'fnx_pd.mt_fnx_pd_draft': lambda s, c, u, r, ctx: r['state'] == 'draft',
             'fnx_pd.mt_fnx_pd_sequenced': lambda s, c, u, r, ctx: r['state'] == 'sequenced',
             'fnx_pd.mt_fnx_pd_released': lambda s, c, u, r, ctx: r['state'] == 'released',
-            'fnx_pd.mt_fnx_pd_running': lambda s, c, u, r, ctx: r['state'] == 'running',
-            'fnx_pd.mt_fnx_pd_stopped': lambda s, c, u, r, ctx: r['state'] == 'stopped',
-            'fnx_pd.mt_fnx_pd_produced': lambda s, c, u, r, ctx: r['state'] == 'produced',
             'fnx_pd.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
             'fnx_pd.mt_fnx_pd_cancelled': lambda s, c, u, r, ctx: r['state'] == 'cancelled',
             }
         }
-
-    def _calc_display_time(self, cr, uid, ids, field_name, args, context=None):
-        res = {}
-        if not ids:
-            return res
-        elif isinstance(ids, (int, long)):
-            ids = [ids]
-        for record in self.read(cr, uid, ids, fields=['last_start_time', 'last_finish_time'], context=context):
-            rec_id = record['id']
-            last_start_time = record['last_start_time']
-            last_finish_time = record['last_finish_time']
-            res[rec_id] = False
-            if last_start_time:
-                text = fields.datetime.context_timestamp(
-                            cr, uid,
-                            datetime.strptime(last_start_time, DEFAULT_SERVER_DATETIME_FORMAT),
-                            context=context,
-                            ).strftime(DEFAULT_SERVER_TIME_FORMAT)
-                if last_finish_time:
-                    text += '\n%s' % (fields.datetime.context_timestamp(
-                                cr, uid,
-                                datetime.strptime(last_finish_time, DEFAULT_SERVER_DATETIME_FORMAT),
-                                context=context,
-                                ).strftime(DEFAULT_SERVER_TIME_FORMAT))
-                res[rec_id] = text
-        return res
 
     def _get_color(self, cr, uid, ids, field_name, args, context=None):
         res = {}
@@ -165,9 +133,7 @@ class fnx_pd_order(osv.Model):
             confirmed = record.confirmed
             sequence = record.sequence
             color = None
-            if state in ('running','stopped','produced','complete'):
-                color = 'green'
-            elif (state == 'released' and confirmed):
+            if state in ('released','complete'):
                 color = 'green'
             elif state == 'cancelled':
                 color = 'gray'
@@ -236,8 +202,6 @@ class fnx_pd_order(osv.Model):
             ('draft', 'New'),
             ('sequenced', 'Scheduled'),
             ('released', 'Released'),
-            ('running', 'Running'),
-            ('stopped', 'Stopped'),
             ('complete', 'Complete'),
             ('cancelled', 'Cancelled'),
             ],
@@ -268,13 +232,8 @@ class fnx_pd_order(osv.Model):
         'schedule_date': fields.date('Run Date', track_visibility='onchange'),
         'schedule_date_set': fields.boolean('Date Locked', help='if True, nightly script will not update this field'),
         'sequence': fields.integer('Order of Production'),
-        'start_date': fields.datetime('Production Started', oldname='started', track_visibility='onchange'),
         'finish_date': fields.datetime('Production Finished', oldname='completed', track_visibility='onchange'),
-        'last_start_time': fields.datetime('Most recent start date-time'),
-        'last_finish_time': fields.datetime('Most recent finish date-time'),
         'completed_fis_qty': fields.integer('Total produced (FIS)', track_visibility='onchange'),
-        'display_time': fields.function(_calc_display_time, type='text', string='Time'),
-        'cumulative_time': fields.float('Total Time'),
         'dept': fields.char('Department', size=10, track_visibility='onchange'),
         'special_instructions': fields.text('Special Instructions'),
         # formula info
@@ -312,8 +271,6 @@ class fnx_pd_order(osv.Model):
     _defaults = {
         'state': 'draft',           # also checked for in create() as script may pass False
         'sequence': 0,
-        'display_time': '',
-        'cumulative_time': 0,
         }
 
     def create(self, cr, uid, values, context=None):
@@ -367,68 +324,6 @@ class fnx_pd_order(osv.Model):
                 _logger.error('failed trying to write id %s with %s', record.id, vals)
                 raise
         return True
-
-    def pd_list_recall(self, cr, uid, ids, context=None):
-        vals = {'state': 'sequenced'}
-        for record in self.browse(cr, uid, ids, context=context):
-            if record.order_no == 'CLEAN':
-                continue
-            if record.confirmed == 'user':
-                vals['confirmed'] = False
-                for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'fis_qty_consumed': ingredient.item_id.fis_qty_consumed+ingredient.qty_needed})
-                    if not res:
-                        return False
-        return self.write(cr, uid, ids, vals, context=context)
-
-    def pd_list_release(self, cr, uid, ids, context=None):
-        vals = {'state':'released'}
-        for record in self.browse(cr, uid, ids, context=context):
-            if record.order_no == 'CLEAN':
-                continue
-            if record.confirmed != 'fis':
-                vals['confirmed'] = 'user'
-                for ingredient in record.ingredient_ids:
-                    res = ingredient.item_id.write({'fis_qty_consumed': ingredient.item_id.fis_qty_consumed-ingredient.qty_needed})
-                    if not res:
-                        return False
-        return self.write(cr, uid, ids, vals, context=context)
-
-    def pd_job_special_instructions_acknowledged(self, cr, uid, ids, context=None):
-        return {
-                'name': 'Special Instructions Acknowledged',
-                'view_type': 'form',
-                'view_mode': 'form',
-                'view_id': self.pool.get('ir.model.data').get_object_reference(cr, uid, 'fnx_pd', 'fnx_pd_order_operator_acknowledged_form')[1],
-                'res_model': 'fnx.pd.order',
-                'res_id': ids[0],
-                'type': 'ir.actions.act_window',
-                'target': 'new',
-                'context': context,
-                }
-
-    def pd_job_start(self, cr, uid, ids, context=None):
-        return self.write(
-                cr, uid, ids,
-                {'state':'running', 'last_start_time':DateTime.now(), 'last_finish_time':False},
-                context=context,
-                )
-
-    def pd_job_stop(self, cr, uid, ids, context=None):
-        res = self.write(cr, uid, ids, {'state':'stopped', 'last_finish_time':DateTime.now()}, context=context)
-        if not res:
-            return res
-        if isinstance(ids, (int, long)):
-            ids = [ids]
-        for record in self.read(cr, uid, ids, fields=['cumulative_time', 'last_start_time', 'last_finish_time'], context=context):
-            rec_id = record['id']
-            cuma = record['cumulative_time']
-            start = DateTime.strptime(record['last_start_time'], DEFAULT_SERVER_DATETIME_FORMAT)
-            finish = DateTime.strptime(record['last_finish_time'], DEFAULT_SERVER_DATETIME_FORMAT)
-            cuma += float(finish - start)
-            if not self.write(cr, uid, rec_id, {'cumulative_time': cuma}, context=context):
-                return False
-        return res
 
     def pd_state(self, cr, uid, ids, context):
         state = context.pop('new_state')

@@ -23,6 +23,7 @@
                     @line_id
                     @item_id
                     @ordered_qty
+                    @completed_fis_qty
                     @schedule_date
                     @confirmed invisible='1'
                     @allergens
@@ -47,10 +48,7 @@
                                 @item_id readonly='True' .oe_inline options="{'create':False, 'create_edit':False}"
                             ~h3
                                 ~label for='tracking_no' string='Tracking #' .oe_inline
-                                @tracking_no readonly='True' .oe_inline attrs="{'invisible': [('state','not in',['released','running','stopped','complete','cancelled'])]}"
-                        ~div .oe_right .oe_button_box @button_box
-                            ~button $Release_to_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_release' states='sequenced' type='object'
-                            ~button $Retract_from_floor groups='fnx_pd.group_fnx_pd_user' name='pd_list_recall' states='released' type='object'
+                                @tracking_no readonly='True' .oe_inline attrs="{'invisible': [('state','not in',['released','complete','cancelled'])]}"
                         ~group
                             ~group
                                 @schedule_date
@@ -66,11 +64,9 @@
                                 @allergens
                             ~group
                                 @dept
-                                @markem attrs="{'invisible': [('state','not in',['released','running','stopped'])]}"
+                                @markem attrs="{'invisible': [('state','!=','released')]}"
                                 @line_id
                                 @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
-                            ~group
-                                @cumulative_time widget='float_time'
                         ~notebook
                             ~page $Special_Instructions
                                 @special_instructions nolabel='1'
@@ -92,8 +88,6 @@
                                 ~button $New name='pd_state' type='object' context="{'new_state': 'draft'}"
                                 ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'sequenced'}"
                                 ~button $Released name='pd_state' type='object' context="{'new_state': 'released'}"
-                                ~button $Running name='pd_state' type='object' context="{'new_state': 'running'}"
-                                ~button $Stopped name='pd_state' type='object' context="{'new_state': 'stopped'}"
                                 ~button $Complete name='pd_state' type='object' context="{'new_state': 'complete'}"
                                 ~button $Cancelled name='pd_state' type='object' context="{'new_state': 'cancelled'}"
                     ~div .oe_chatter
@@ -111,15 +105,13 @@
                     @coating $Coating
                     @allergens $Allergens
                     ~separator
-                    ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','released','running','stopped'])]"
-                    ~filter $In_Progress @type_progress domain="[('state','in',['running','stopped'])]"
+                    ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','released'])]"
+                    ~filter $In_Progress @type_progress domain="[('state','=','released')]"
                     ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
                     ~filter $New @type_draft domain="[('state','=','draft')]"
                     ~filter $Scheduled @type_scheduled domain="[('state','=','sequenced')]"
                     ~filter $Released @type_scheduled domain="[('state','=','released')]"
-                    ~filter $Running @type_running domain="[('state','=','running')]"
-                    ~filter $Paused @type_ready domain="[('state','=','stopped')]"
                     ~filter $Complete @type_complete domain="[('state','=','complete')]"
                     ~filter $Cancelled @type_cancelled domain="[('state','=','cancelled')]"
                     ~separator
@@ -168,74 +160,6 @@
                     @coating
                     @state
 
-        ~record model='ir.actions.server' #action_fnx_sr_release_to_floor
-           @name: Release to Floor
-           @type: ir.actions.server
-           @model_id ref='model_fnx_pd_order'
-           @state: code
-           @code: self.pd_list_release(cr, uid, context.get('active_ids'), context=context)
-
-        ~record model='ir.values' #value_fnx_sr_release_to_floor
-           @name: Release to Floor
-           @action_id ref='action_fnx_sr_release_to_floor'
-           @value eval="'ir.actions.server,' + str(ref('action_fnx_sr_release_to_floor'))"
-           @key: action
-           @model_id ref='model_fnx_pd_order'
-           @model: fnx.pd.order
-           @key2: client_action_multi
-
-        ~record model='ir.actions.server' #action_fnx_sr_recall_from_floor
-           @name: Retract from Floor
-           @type: ir.actions.server
-           @model_id ref='model_fnx_pd_order'
-           @state: code
-           @code: self.pd_list_recall(cr, uid, context.get('active_ids'), context=context)
-
-        ~record model='ir.values' #value_fnx_sr_recall_from_floor
-           @name: Retract from Floor
-           @action_id ref='action_fnx_sr_recall_from_floor'
-           @value eval="'ir.actions.server,' + str(ref('action_fnx_sr_recall_from_floor'))"
-           @key: action
-           @model_id ref='model_fnx_pd_order'
-           @model: fnx.pd.order
-           @key2: client_action_multi
-
-        ~record model='ir.ui.view' #fnx_pd_order_operator_acknowledged_form
-            @name: fnx_pd_order_operator_acknowledged_form
-            @model: fnx.pd.order
-            @arch type='xml'
-                ~form $Production_Orders version='7.0' create='false' edit='false'
-                    ~header
-                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
-                    ~sheet
-                        ~div .oe_left
-                            ~h1
-                                ~label for='order_no' $Order .oe_inline readonly='True'
-                                @order_no readonly='True' $Order .oe_inline
-                            ~h2
-                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
-                        ~div .oe_right .oe_button_box @button_box
-                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': [('state','not in',['released','stopped'])]}"
-                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': [('state','!=','running')]}"
-                        ~group
-                            ~group
-                                @schedule_date readonly='True'
-                            ~group
-                                @ordered_qty readonly='True'
-                                @completed_fis_qty readonly='True'
-                                @finish_date readonly='True'
-                        ~group
-                            ~group
-                                @coating readonly='True'
-                                @allergens readonly='True'
-                            ~group
-                                @dept readonly='True'
-                            ~group
-                                @cumulative_time widget='float_time' readonly='True'
-                        ~notebook
-                            ~page $Special_Instructions
-                                @special_instructions nolabel='1' readonly='True'
-
         // line views
 
         ~record model='ir.ui.view' #view_fnx_pd_order_clean
@@ -281,10 +205,7 @@
                         ~page $Schedule
                             @order_ids nolabel='1'
                                 ~tree create='0' delete='0' fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
-                                    ~button $Release name='pd_list_release' states='sequenced' type='object'
-                                    ~button $Retract name='pd_list_recall' states='released' type='object'
                                     @color invisible='1'
-                                    @display_time
                                     @order_no
                                     @item_id
                                     @ordered_qty
@@ -346,6 +267,7 @@
                                     @mark_prod_line
                                     @item_id
                                     @ordered_qty
+                                    @completed_fis_qty
                                     @schedule_date
                                     @confirmed invisible='1'
                                     @allergens
@@ -361,10 +283,6 @@
                                                 @order_no readonly='True' $Order .oe_inline
                                             ~h2
                                                 @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
-                                        ~div .oe_right .oe_button_box @button_box
-                                            ~span attrs="{'invisible': ['|',('special_instructions','=',False),('state','=','running')]}":  Check the Special Instructions
-                                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','not in',['released','stopped'])]}"
-                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': [('state','!=','running')]}"
                                         ~group
                                             ~group
                                                 @schedule_date
@@ -378,69 +296,6 @@
                                                 @allergens
                                             ~group
                                                 @dept
-                                            ~group
-                                                @cumulative_time widget='float_time'
-                                        ~notebook
-                                            ~page $Special_Instructions attrs="{'invisible': [('special_instructions','=',False)]}"
-                                                @special_instructions nolabel='1'
-                                                ~button $Acknowledge name='pd_job_special_instructions_acknowledged' type='object' attrs="{'invisible': [('state','=','running')]}"
-                                                //    context="{'default_order_no': order_no, 'default_item_id': item_id, 'default_schedule_date': schedule_date, 'default_ordered_qty': ordered_qty, 'default_completed_fis_qty': completed_fis_qty, 'default_finish_date': finish_date, 'default_coating': coating, 'default_allergens': allergens, 'default_dept': dept, 'default_special_instructions': special_instructions, 'default_state': state}")
-
-        ~record model='ir.ui.view' #fnx_pd_production_line_operator_acknowledged_form
-            @name: Lines
-            @model: fis_integration.production_line
-            @arch type='xml'
-                ~form $Production_Lines version='7.0' create='0' delete='0' edit='fnx_pd.group_fnx_pd_user'
-                    ~h1
-                        @desc readonly='True'
-                    ~notebook
-                        ~page $Jobs
-                            @order_ids nolabel='1' context="{'view_ref_id': 'fnx_pd_order_operator_form'}"
-                                ~tree fonts="bold:color=='orange'" colors="green:color=='green';red:color=='red';orange:color=='orange';blue:color=='blue';gray:color=='gray';purple:color=='purple';"
-                                    @color invisible='1'
-                                    @display_time
-                                    @order_no
-                                    @item_id
-                                    @ordered_qty
-                                    @sequence invisible='1'
-                                    @confirmed invisible='1'
-                                    @allergens
-                                    @coating
-                                    @schedule_date
-                                    @state
-                                ~form $Production_Orders version='7.0' create='false'
-                                    ~header
-                                        @state widget='statusbar' statusbar_visible='draft,sequenced,complete'
-                                    ~sheet
-                                        ~div .oe_left
-                                            ~h1
-                                                ~label for='order_no' $Order .oe_inline
-                                                @order_no readonly='True' $Order .oe_inline
-                                            ~h2
-                                                @item_id readonly='True' $Item .oe_inline options="{'create':False, 'create_edit':False}"
-                                        ~div .oe_right .oe_button_box @button_box
-                                            ~span attrs="{'invisible': ['|',('special_instructions','=',False),('state','=','running')]}":  Check the Special Instructions
-                                            ~button $Start_Job name='pd_job_start' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','not in',['released','stopped'])]}"
-                                            ~button $Stop_Job name='pd_job_stop' type='object' attrs="{'invisible': ['|',('special_instructions','!=',False),('state','!=','running')]}"
-                                        ~group
-                                            ~group
-                                                @schedule_date
-                                            ~group
-                                                @ordered_qty
-                                                @completed_fis_qty readonly='True'
-                                                @finish_date readonly='True'
-                                        ~group
-                                            ~group
-                                                @coating
-                                                @allergens
-                                            ~group
-                                                @dept
-                                            ~group
-                                                @cumulative_time widget='float_time'
-                                        ~notebook
-                                            ~page $Special_Instructions attrs="{'invisible': [('special_instructions','=',False)]}"
-                                                @special_instructions nolabel='1'
-                                                ~button $Acknowledge name='fnx_pd.action_fnx_pd_operator_acknowledged_instructions)d' type='action'
 
         ~record model='ir.actions.act_window' #action_fnx_pd_production_operator_line
             @name: Lines
@@ -449,7 +304,7 @@
             @view_id ref='fnx_pd_production_line_tree'
             @view_mode: tree,form
             @domain: [('desc','!=','Open')]
-            @context eval="{'fnx.pd.order_domain': [('state','in',['running','stopped','released'])]}"
+            @context eval="{'fnx.pd.order_domain': [('state','=','released')]}"
 
         ~record model='ir.actions.act_window.view' #action_view_fnx_pd_production_operator_tree
             @sequence eval='20'
