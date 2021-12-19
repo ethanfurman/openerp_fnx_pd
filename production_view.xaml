@@ -64,7 +64,7 @@
                                 @allergens
                             ~group
                                 @dept
-                                @markem attrs="{'invisible': [('state','!=','released')]}"
+                                @markem attrs="{'invisible': [('state','not in',['released','produced'])]}"
                                 @line_id
                                 @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                         ~notebook
@@ -88,6 +88,7 @@
                                 ~button $New name='pd_state' type='object' context="{'new_state': 'draft'}"
                                 ~button $Scheduled name='pd_state' type='object' context="{'new_state': 'sequenced'}"
                                 ~button $Released name='pd_state' type='object' context="{'new_state': 'released'}"
+                                ~button $Produced name='pd_state' type='object' context="{'new_state': 'produced'}"
                                 ~button $Complete name='pd_state' type='object' context="{'new_state': 'complete'}"
                                 ~button $Cancelled name='pd_state' type='object' context="{'new_state': 'cancelled'}"
                     ~div .oe_chatter
@@ -106,12 +107,13 @@
                     @allergens $Allergens
                     ~separator
                     ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','released'])]"
-                    ~filter $In_Progress @type_progress domain="[('state','=','released')]"
+                    ~filter $In_Progress @type_progress domain="[('state','in',['released','produced'])]"
                     ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
                     ~filter $New @type_draft domain="[('state','=','draft')]"
                     ~filter $Scheduled @type_scheduled domain="[('state','=','sequenced')]"
                     ~filter $Released @type_scheduled domain="[('state','=','released')]"
+                    ~filter $Produced @type_scheduled domain="[('state','=','produced')]"
                     ~filter $Complete @type_complete domain="[('state','=','complete')]"
                     ~filter $Cancelled @type_cancelled domain="[('state','=','cancelled')]"
                     ~separator

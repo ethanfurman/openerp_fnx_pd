@@ -117,6 +117,7 @@ class fnx_pd_order(osv.Model):
             'fnx_pd.mt_fnx_pd_draft': lambda s, c, u, r, ctx: r['state'] == 'draft',
             'fnx_pd.mt_fnx_pd_sequenced': lambda s, c, u, r, ctx: r['state'] == 'sequenced',
             'fnx_pd.mt_fnx_pd_released': lambda s, c, u, r, ctx: r['state'] == 'released',
+            'fnx_pd.mt_fnx_pd_produced': lambda s, c, u, r, ctx: r['state'] == 'produced',
             'fnx_pd.mt_fnx_pd_complete': lambda s, c, u, r, ctx: r['state'] == 'complete',
             'fnx_pd.mt_fnx_pd_cancelled': lambda s, c, u, r, ctx: r['state'] == 'cancelled',
             }
@@ -133,7 +134,7 @@ class fnx_pd_order(osv.Model):
             confirmed = record.confirmed
             sequence = record.sequence
             color = None
-            if state in ('released','complete'):
+            if state in ('released','produced','complete'):
                 color = 'green'
             elif state == 'cancelled':
                 color = 'gray'
@@ -202,6 +203,7 @@ class fnx_pd_order(osv.Model):
             ('draft', 'New'),
             ('sequenced', 'Scheduled'),
             ('released', 'Released'),
+            ('produced', 'Produced'),
             ('complete', 'Complete'),
             ('cancelled', 'Cancelled'),
             ],
