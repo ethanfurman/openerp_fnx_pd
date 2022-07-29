@@ -134,7 +134,7 @@ class fnx_pd_order(osv.Model):
             confirmed = record.confirmed
             sequence = record.sequence
             color = None
-            if state in ('released','produced','complete'):
+            if state in ('released','produced','complete',) or confirmed:
                 color = 'green'
             elif state == 'cancelled':
                 color = 'gray'
