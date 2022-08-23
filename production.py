@@ -131,13 +131,13 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         for record in self.browse(cr, uid, ids, context=context):
             state = record.state
-            confirmed = record.confirmed
-            sequence = record.sequence
             color = None
-            if state in ('released','produced','complete',) or confirmed:
-                color = 'green'
-            elif state == 'cancelled':
+            if state == 'cancelled':
                 color = 'gray'
+            elif state in ('produced', 'complete'):
+                color = 'black'
+            elif state == 'released':
+                color = 'green'
             if color is not None:
                 res[record.id] = color
                 continue
@@ -147,15 +147,12 @@ class fnx_pd_order(osv.Model):
                     break
             else:
                 out_of_stock = False
-            color = 'black'
-            if out_of_stock and not confirmed:
+            if out_of_stock:
                 color = 'red'
-            elif state == 'draft' and confirmed:
-                color = 'orange'
             elif state == 'sequenced':
                 color = 'blue'
-            elif sequence == 0:
-                color = 'purple'
+            else: # draft
+                color = 'black'
             res[record.id] = color
         return res
 
@@ -169,6 +166,21 @@ class fnx_pd_order(osv.Model):
             else:
                 res[record.id] = '%s' % (record.line_id.name, )
         return res
+
+    def _get_orders_from_ingredients(self, cr, uid, ids, context=None):
+        _logger.warning('product ids: %r', ids)
+        product_product = self
+        product_ids = ids
+        self = product_product.pool.get('fnx.pd.order')
+        # get order ingredient ids that match the product ids
+        pd_ingredient = self.pool.get('fnx.pd.ingredient')
+        ingredient_ids = pd_ingredient.search(cr, SUPERUSER_ID, [('item_id','in',product_ids)])
+        _logger.warning('ingredient ids: %r', ingredient_ids)
+        # get order ids that include the order ingredients
+        ids = self.search(cr, SUPERUSER_ID, [('ingredient_ids','in',ingredient_ids)])
+        _logger.warning('order ids: %r', ids)
+        return ids
+
 
     def _post_init(self, pool, cr):
         ids = self.search(cr, 1, [('color','=',False)])
@@ -257,11 +269,8 @@ class fnx_pd_order(osv.Model):
             size=10,
             string='Color State',
             store={
-                'fnx.pd.order': (
-                    lambda self, cr, uid, ids, ctx={}: ids,
-                    ['state', 'confirmed', 'sequence'],
-                    10,
-                    ),
+                'fnx.pd.order': (self_ids, ['state'], 10),
+                'product.product': (_get_orders_from_ingredients, ['fis_qty_available'], 10),
                 },
             ),
         }
