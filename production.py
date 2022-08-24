@@ -137,7 +137,7 @@ class fnx_pd_order(osv.Model):
             elif state in ('produced', 'complete'):
                 color = 'black'
             elif state == 'released':
-                color = 'green'
+                color = 'blue'
             if color is not None:
                 res[record.id] = color
                 continue
@@ -149,10 +149,8 @@ class fnx_pd_order(osv.Model):
                 out_of_stock = False
             if out_of_stock:
                 color = 'red'
-            elif state == 'sequenced':
-                color = 'blue'
-            else: # draft
-                color = 'black'
+            else:
+                color = 'green'
             res[record.id] = color
         return res
 
