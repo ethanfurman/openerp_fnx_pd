@@ -308,25 +308,25 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         if not ids:
             return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
-        nightly = (context or {}).get('fis-updates', False)
+        # nightly = (context or {}).get('fis-updates', False)
         for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
             final_record = Proposed(self, cr, values, record, context)
             vals = values.copy()
 
-            if nightly:
-                if 'line_id' in vals and final_record.line_id_set:
-                    del vals['line_id']
-                    final_record.line_id = record.line_id
-                if 'schedule_date' in vals and final_record.schedule_date_set:
-                    del vals['schedule_date']
-                    final_record.schedule_date = record.schedule_date
-            else:
-                if vals.get('line_id') and not final_record.line_id_set:
-                    vals['line_id_set'] = final_record.line_id_set = True
-                if vals.get('schedule_date') and not final_record.schedule_date_set:
-                    vals['schedule_date_set'] = final_record.schedule_date_set = True
+            # if nightly:
+            #     if 'line_id' in vals and final_record.line_id_set:
+            #         del vals['line_id']
+            #         final_record.line_id = record.line_id
+            #     if 'schedule_date' in vals and final_record.schedule_date_set:
+            #         del vals['schedule_date']
+            #         final_record.schedule_date = record.schedule_date
+            # else:
+            #     if vals.get('line_id') and not final_record.line_id_set:
+            #         vals['line_id_set'] = final_record.line_id_set = True
+            #     if vals.get('schedule_date') and not final_record.schedule_date_set:
+            #         vals['schedule_date_set'] = final_record.schedule_date_set = True
             if final_record.state == 'draft':
-                if final_record.confirmed or final_record.schedule_date_set:
+                if final_record.confirmed:   # or final_record.schedule_date_set:
                     vals['state'] = final_record.state = 'sequenced'
             try:
                 if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
