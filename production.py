@@ -5,7 +5,7 @@ from fnx_fs.fields import files
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.tools import self_ids
-from fnx.oe import Proposed
+# from fnx.oe import Proposed
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -124,6 +124,25 @@ class fnx_pd_order(osv.Model):
         }
 
     def _get_color(self, cr, uid, ids, field_name, args, context=None):
+        # Color Summary (`color` field)
+        # -----------------------------
+        # - black: produced, complete
+        # - gray: cancelled
+        # - blue: released (label printed)
+        # - red: scheduled and missing stock, or confirmed and not scheduled
+        # - dark red: draft and missing stock
+        # - green: scheduled and stock available
+        # - dark green: draft and stock available
+        #
+        # Status Summary (`state` field)
+        # ------------------------------
+        # - draft (New): exists in FIS; dark red = missing stock, dark green = stock available, red = confirmed (should be sequenced)
+        # - sequenced (Scheduled): has a date to be produced; red = missing stock, green = stock available
+        # - released (Released): label has been printed and product is being produced; blue
+        # - produced (Produced): order has been completed today; black
+        # - complete (Complete): order has been completed; black
+        # - cancelled (Cancelled): order has been cancelled; gray
+
         res = {}
         if not ids:
             return res
@@ -131,6 +150,8 @@ class fnx_pd_order(osv.Model):
             ids = [ids]
         for record in self.browse(cr, uid, ids, context=context):
             state = record.state
+            confirmed = record.confirmed
+            sequenced = record.state == 'sequenced'
             color = None
             if state == 'cancelled':
                 color = 'gray'
@@ -141,16 +162,28 @@ class fnx_pd_order(osv.Model):
             if color is not None:
                 res[record.id] = color
                 continue
+            # only draft and sequenced orders get this far
             for ingredient in record.ingredient_ids:
                 if ingredient.qty_avail < ingredient.qty_needed:
                     out_of_stock = True
                     break
             else:
                 out_of_stock = False
-            if out_of_stock:
+            if out_of_stock and sequenced or confirmed and not sequenced:
                 color = 'red'
-            else:
+            # still possible:
+            # - draft, not confirmed, w/ stock
+            # - draft, not confirmed, w/o stock
+            # - sequenced w/ stock
+            elif out_of_stock:
+                # can only be a draft order
+                color = 'darkred'
+            elif sequenced:
+                # must have stock
                 color = 'green'
+            else:
+                # must be draft, w/ stock
+                color = 'darkgreen'
             res[record.id] = color
         return res
 
@@ -267,7 +300,7 @@ class fnx_pd_order(osv.Model):
             size=10,
             string='Color State',
             store={
-                'fnx.pd.order': (self_ids, ['state'], 10),
+                'fnx.pd.order': (self_ids, ['state','confirmed'], 10),
                 'product.product': (_get_orders_from_ingredients, ['fis_qty_available'], 10),
                 },
             ),
@@ -300,39 +333,39 @@ class fnx_pd_order(osv.Model):
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
         return order_id
 
-    def write(self, cr, uid, ids, values, context=None):
-        'if needed: update status, change/remove order to/from producuction line'
-        if isinstance(ids, (int, long)):
-            ids = [ids]
-        if not ids:
-            return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
-        # nightly = (context or {}).get('fis-updates', False)
-        for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
-            final_record = Proposed(self, cr, values, record, context)
-            vals = values.copy()
-
-            # if nightly:
-            #     if 'line_id' in vals and final_record.line_id_set:
-            #         del vals['line_id']
-            #         final_record.line_id = record.line_id
-            #     if 'schedule_date' in vals and final_record.schedule_date_set:
-            #         del vals['schedule_date']
-            #         final_record.schedule_date = record.schedule_date
-            # else:
-            #     if vals.get('line_id') and not final_record.line_id_set:
-            #         vals['line_id_set'] = final_record.line_id_set = True
-            #     if vals.get('schedule_date') and not final_record.schedule_date_set:
-            #         vals['schedule_date_set'] = final_record.schedule_date_set = True
-            if final_record.state == 'draft':
-                if final_record.confirmed:   # or final_record.schedule_date_set:
-                    vals['state'] = final_record.state = 'sequenced'
-            try:
-                if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
-                    return False
-            except Exception:
-                _logger.error('failed trying to write id %s with %s', record.id, vals)
-                raise
-        return True
+    # def write(self, cr, uid, ids, values, context=None):
+    #     'if needed: update status, change/remove order to/from producuction line'
+    #     if isinstance(ids, (int, long)):
+    #         ids = [ids]
+    #     if not ids:
+    #         return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
+    #     # nightly = (context or {}).get('fis-updates', False)
+    #     for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
+    #         final_record = Proposed(self, cr, values, record, context)
+    #         vals = values.copy()
+    #
+    #         # if nightly:
+    #         #     if 'line_id' in vals and final_record.line_id_set:
+    #         #         del vals['line_id']
+    #         #         final_record.line_id = record.line_id
+    #         #     if 'schedule_date' in vals and final_record.schedule_date_set:
+    #         #         del vals['schedule_date']
+    #         #         final_record.schedule_date = record.schedule_date
+    #         # else:
+    #         #     if vals.get('line_id') and not final_record.line_id_set:
+    #         #         vals['line_id_set'] = final_record.line_id_set = True
+    #         #     if vals.get('schedule_date') and not final_record.schedule_date_set:
+    #         #         vals['schedule_date_set'] = final_record.schedule_date_set = True
+    #         # if final_record.state == 'draft':
+    #         #     if final_record.confirmed:   # or final_record.schedule_date_set:
+    #         #         vals['state'] = final_record.state = 'sequenced'
+    #         try:
+    #             if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
+    #                 return False
+    #         except Exception:
+    #             _logger.error('failed trying to write id %s with %s', record.id, vals)
+    #             raise
+    #     return True
 
     def pd_state(self, cr, uid, ids, context):
         state = context.pop('new_state')
