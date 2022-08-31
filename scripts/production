@@ -11,6 +11,7 @@ import os
 import pwd
 import shutil
 import time
+from ast import literal_eval
 from collections import defaultdict
 from dbf import Date, Time, DateTime
 from logging import INFO, getLogger, Formatter, handlers
@@ -391,19 +392,20 @@ def duplicates(purge):
         directory=('directory of production orders to add/update in system', OPTION, 'd', Path),
         abort_on_error=Spec('abort on error', FLAG, 'a', usage='abort'),
         )
-def update(file, directory=SOURCE, abort_on_error=False):
+def release(file, directory=SOURCE, abort_on_error=False):
     """
     Use files with the structure of
 
         order={
           'line_no': '07',
-          # 'local_contact': ['sysadmin', 'rgiannini', 'ethan'],
+          'status': 'sequenced',
+          'markem': '...',
           }
 
     to update OpenERP.FnxPD and set the status to 'Released to Floor'.
     """
-    logger.info('update(file=%r, directory=%r', file, directory)
-    print('update(file=%r, directory=%r' % (file, directory))
+    logger.info('release(file=%r, directory=%r', file, directory)
+    print('release(file=%r, directory=%r' % (file, directory))
     global fnxpd
     fnxpd = oe.get_model('fnx.pd.order')
     if file:
@@ -413,7 +415,7 @@ def update(file, directory=SOURCE, abort_on_error=False):
         if not directory.exists():
             abort('directory %s does not exist' % directory)
         try:
-            lock = PidLockFile('/var/run/fnxpd-order_update.pid', timeout=30)
+            lock = PidLockFile('/var/run/fnxpd-order_release.pid', timeout=30)
             lock.seal()
         except AlreadyLocked:
             return
@@ -457,6 +459,81 @@ def update(file, directory=SOURCE, abort_on_error=False):
                 continue
             if dest:
                 archive(file, dest)
+        if failures:
+            error('\n'.join(bad_orders))
+            raise SystemExit(-1)
+    finally:
+        if lock:
+            lock.release()
+    print('done.')
+
+
+@Command(
+        file=('production order to add/update in system', OPTION, 'f', Path),
+        directory=('directory of production orders to add/update in system', OPTION, 'd', Path),
+        abort_on_error=Spec('abort on error', FLAG, 'a', usage='abort'),
+        )
+def schedule(file, directory=SOURCE, abort_on_error=False):
+    """
+    Use files with the structure of
+
+        {'20220829': [312752, 313516, ...]}
+
+    to update the scheduled date of the listed orders.
+    """
+    logger.info('schedule(file=%r', file)
+    print('schedule(file=%r' % (file, ))
+    global fnxpd
+    fnxpd = oe.get_model('fnx.pd.order')
+    if file:
+        files = [file]
+        lock = None
+    else:
+        if not directory.exists():
+            abort('directory %s does not exist' % directory)
+        try:
+            lock = PidLockFile('/var/run/fnxpd-order_schedule.pid', timeout=30)
+            lock.seal()
+        except AlreadyLocked:
+            return
+        files = get_files(directory)
+        if not files:
+            lock.release()
+            return
+    print('processing %r' % ', '.join([s.filename for s in files]))
+    try:
+        failures = False
+        bad_orders = []
+        for file in files:
+            with open(file) as fh:
+                schedules = literal_eval(fh.read())
+            for date, orders in schedules.items():
+                try:
+                    date = Date.strptime(date, '%Y%m%d')
+                except ValueError as exc:
+                    if abort_on_error:
+                        raise
+                    message = '%s: %s %s' % (file, exc.__class__.__name__, exc.message or exc.args)
+                    bad_orders.append(message)
+                    failures = True
+                    continue
+                for order in orders:
+                    try:
+                        update_order({'order_no': str(order), 'schedule_date':date, 'schedule_date_set':True})
+                    except MissingOrder as exc:
+                        if abort_on_error:
+                            raise
+                        message = '%s: %s %s' % (file, exc.__class__.__name__, exc.message or exc.args)
+                        bad_orders.append(message)
+                        failures = True
+                    except Exception as exc:
+                        if abort_on_error:
+                            raise
+                        logger.exception('error processing %s', file)
+                        message = '%s: %s %s' % (file, exc.__class__.__name__, exc.message or exc.args)
+                        bad_orders.append(message)
+                        failures = True
+            archive(file)
         if failures:
             error('\n'.join(bad_orders))
             raise SystemExit(-1)
@@ -561,7 +638,7 @@ def archive(src_file, dest=ARCHIVE):
         basename = basename[3:]
     existing = dest.glob(basename+'*')
     existing.sort()
-    print('found %r' % (existing, ))
+    print('found file %r' % (existing, ))
     if not existing or '_' not in existing[-1]:
         dst_file = dest/basename + '_01'
     else:
@@ -958,7 +1035,7 @@ def update_order(values):
     order_segment = values.pop('order_no')
     order = order_segment.split('-')[0]
     ids = fnxpd.search([('order_no','=like',order)])
-    print('found:', ids)
+    print('found ids:', ids)
     if not ids:
         raise MissingOrder(order_segment)
     else:
@@ -1115,7 +1192,7 @@ def handle_qall(*files):
     #
     # process changes
     #
-    # changed_map = combine_by_value(old_changed_records, new_changed_records)
+    changed_map = combine_by_value(old_changed_records, new_changed_records)
     for changes, records in ProgressView(
             iterable=sorted(changed_map.items()),
             message='processing changed records',
