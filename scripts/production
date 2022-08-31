@@ -419,7 +419,7 @@ def release(file, directory=SOURCE, abort_on_error=False):
             lock.seal()
         except AlreadyLocked:
             return
-        files = get_files(directory)
+        files = get_files(directory, 'PD-')
         if not files:
             lock.release()
             return
@@ -482,7 +482,7 @@ def schedule(file, directory=SOURCE, abort_on_error=False):
     to update the scheduled date of the listed orders.
     """
     logger.info('schedule(file=%r', file)
-    print('schedule(file=%r' % (file, ))
+    print('schedule(file=%r, directory=%r, abort_on_error=%r)' % (file, directory, abort_on_error))
     global fnxpd
     fnxpd = oe.get_model('fnx.pd.order')
     if file:
@@ -496,7 +496,7 @@ def schedule(file, directory=SOURCE, abort_on_error=False):
             lock.seal()
         except AlreadyLocked:
             return
-        files = get_files(directory)
+        files = get_files(directory, 'PDS-')
         if not files:
             lock.release()
             return
@@ -519,7 +519,12 @@ def schedule(file, directory=SOURCE, abort_on_error=False):
                     continue
                 for order in orders:
                     try:
-                        update_order({'order_no': str(order), 'schedule_date':date, 'schedule_date_set':True})
+                        update_order({
+                                'order_no': str(order),
+                                'schedule_date':date,
+                                'schedule_date_set':True,
+                                'state':'sequenced',
+                                })
                     except MissingOrder as exc:
                         if abort_on_error:
                             raise
@@ -656,11 +661,11 @@ def connect(hostname, database, user, password):
     oe.conn = get_connection(hostname=hostname, database=database, login=user, password=password)
     return oe
 
-def get_files(source=SOURCE):
+def get_files(source=SOURCE, pre=''):
     files = [
             source/f
             for f in source.listdir()
-            if f.startswith('PD-')
+            if f.startswith(pre)
             ]
     files.sort(key=lambda f: f.stat().st_mtime)
     return files
