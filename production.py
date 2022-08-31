@@ -169,7 +169,10 @@ class fnx_pd_order(osv.Model):
                     break
             else:
                 out_of_stock = False
-            if out_of_stock and sequenced or confirmed and not sequenced:
+            if (
+                    not confirmed and out_of_stock and sequenced
+                    or confirmed and not sequenced
+                ):
                 color = 'red'
             # still possible:
             # - draft, not confirmed, w/ stock
