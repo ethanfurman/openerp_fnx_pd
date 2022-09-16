@@ -159,6 +159,8 @@ class fnx_pd_order(osv.Model):
                 color = 'black'
             elif state == 'released':
                 color = 'blue'
+            elif confirmed and sequenced:
+                color = 'green'
             if color is not None:
                 res[record.id] = color
                 continue
