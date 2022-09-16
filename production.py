@@ -162,31 +162,20 @@ class fnx_pd_order(osv.Model):
             if color is not None:
                 res[record.id] = color
                 continue
-            # only draft and sequenced orders get this far
+            # easy ones done, calculate stock levels for next color selection
             for ingredient in record.ingredient_ids:
                 if ingredient.qty_avail < ingredient.qty_needed:
                     out_of_stock = True
                     break
             else:
                 out_of_stock = False
-            if (
-                    not confirmed and out_of_stock and sequenced
-                    or confirmed and not sequenced
-                ):
-                color = 'red'
-            # still possible:
-            # - draft, not confirmed, w/ stock
-            # - draft, not confirmed, w/o stock
-            # - sequenced w/ stock
-            elif out_of_stock:
-                # can only be a draft order
-                color = 'darkred'
-            elif sequenced:
-                # must have stock
-                color = 'green'
+            if confirmed and not sequenced:
+                # this order should be scheduled since inventory has already been pulled
+                color = 'err_green'
+            if not out_of_stock:
+                color = ('darkgreen','green')[sequenced]
             else:
-                # must be draft, w/ stock
-                color = 'darkgreen'
+                color = ('darkred','red')[sequenced]
             res[record.id] = color
         return res
 
