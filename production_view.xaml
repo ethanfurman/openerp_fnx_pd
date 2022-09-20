@@ -75,7 +75,8 @@
                                     ~group
                                         @formula_code nolabel='1'
                                 @ingredient_ids nolabel='1'
-                                    ~tree create='0' edit='0' delete='0' colors="red:qty_avail<qty_needed and not confirmed;"
+                                    ~tree create='0' edit='0' delete='0' colors="red:order_state in ['draft','sequenced'] and qty_avail<qty_needed and not confirmed;"
+                                        @order_state invisible='1'
                                         @item_id
                                         @qty_needed
                                         @qty_desc $Unit
