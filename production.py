@@ -217,6 +217,11 @@ class fnx_pd_order(osv.Model):
             self.write(cr, 1, ids, {'color': color})
         return True
 
+    def reset_released(self, cr, uid, arg=None, context=None, ids=None):
+        released_job_ids = self.search(cr, uid, [('state','=','released')], context=context)
+        self.write(cr, uid, released_job_ids, {'state': 'sequenced'}, context=context)
+        return True
+
     def _unique_order_no(self, cr, uid, ids, _cache={}):
         # get the order numbers of the ids given, then check if any other
         # orders also have those order numbers
