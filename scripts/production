@@ -25,7 +25,7 @@ from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from VSS.finance import FederalHoliday
-# from tools import combine_by_value, Model
+from tools import combine_by_value, Model
 from traceback import format_exception
 from xmlrpclib import Fault
 
@@ -100,7 +100,7 @@ QAll_C = IntEnum(
 HEADER, EMAIL, DEPT, PROD_LINE, TYPE, ITEM_CODE, ITEM_DESC, \
     ORDER_NUM, CONFIRMED, QTY, DATE, DAY, COATING, ALLERGENS = QAll_C
 
-
+TODAY = Date.today()
 
 # API
 
@@ -394,6 +394,8 @@ def duplicates(purge):
         )
 def release(file, directory=SOURCE, abort_on_error=False):
     """
+    Markem label has been generated, set status to Released
+
     Use files with the structure of
 
         order={
@@ -430,6 +432,7 @@ def release(file, directory=SOURCE, abort_on_error=False):
         for file in files:
             try:
                 order = get_order(file)
+                order['last_release_date'] = TODAY
                 logger.info(
                         '%s: %s',
                         file.name,
@@ -475,6 +478,8 @@ def release(file, directory=SOURCE, abort_on_error=False):
         )
 def schedule(file, directory=SOURCE, abort_on_error=False):
     """
+    Update the scheduled date of the listed orders.
+
     Use files with the structure of
 
         {'20220829': [312752, 313516, ...]}
