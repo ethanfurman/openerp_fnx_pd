@@ -291,6 +291,7 @@ class fnx_pd_order(osv.Model):
             string='Ingredients',
             ),
         'label_images': files('images', string='Markem Labels', style='images', sort='oldest'),
+        'last_release_date': fields.date('Last Markem Label'),
         # status color
         'color': fields.function(
             _get_color,

@@ -25,7 +25,7 @@ from VSS.BBxXlate.fisData import fisData
 from VSS.utils import fix_date
 from VSS.xl import open_workbook
 from VSS.finance import FederalHoliday
-from tools import combine_by_value, Model
+from updates.tools import combine_by_value, Model
 from traceback import format_exception
 from xmlrpclib import Fault
 
@@ -46,6 +46,7 @@ SOURCE = Path('%s/var/fis/production/' % VIRTUAL_ENV)
 ARCHIVE = Path('%s/var/openerp/archive/fnx_pd/' % VIRTUAL_ENV)
 ERRORS = Path('%s/var/openerp/archive/fnx_pd/error' % VIRTUAL_ENV)
 CONFIG = Path('%s/config/fnx.ini' % VIRTUAL_ENV)
+MARKEM = Path('%s/var/openerp/fnxfs/fnx_pd/order/images' % VIRTUAL_ENV)
 
 try:
     OPENERP = tuple(pwd.getpwnam('openerp')[2:4])
@@ -266,6 +267,63 @@ def repair(order_no):
             # FIXME
             pass
             orders
+
+@Command(
+        )
+def markem_date():
+    """
+    set last_release_date to last markem label date
+    """
+    connect(HOST, DB, USER, PW)
+    fnx_pd_order = oe.conn.get_model('fnx.pd.order')
+    for _, image_dirs, _ in MARKEM.walk():
+        break
+    processed = updated = 0
+    errors = set()
+    for image_dir in ViewProgress(image_dirs):
+        for image in MARKEM.listdir(image_dir):
+            processed += 1
+            # image is either a file with the date we want, or an archive bundle
+            # and the latest file in the bundle is the date we want
+            image = MARKEM/image_dir/image
+            if image.isfile():
+                mtime = image.stat().st_mtime
+                mdate = time.localtime(mtime)[:3]
+                date = Date(*mdate)
+            else:  # archive bundle
+                files = image.listdir()
+                files.sort()
+                ymd, _ = files[-1].split('_')
+                y, m, d = map(int, ymd.split('-'))
+                date = Date(y, m, d)
+            # we have a date, check the order for latest date
+            # and we might as well check the state while we're at it
+            #
+            # image_dir is also the order number
+            orders = fnx_pd_order.read([('order_no','like',image_dir)], fields=['last_release_date','state'])
+            if not orders:
+                logger.error('unable to find order %r', image_dir)
+                errors.add(image_dir)
+                continue
+            for order in orders:
+                values = {}
+                state = order.state
+                if order.last_release_date != date:
+                    values['last_release_date'] = date
+                if state == 'complete':
+                    state = 'produced'
+                if state not in ('released', 'produced'):
+                    values['state'] = 'released'
+                if values:
+                    if DRYRUN:
+                        print(values)
+                        continue
+                    fnx_pd_order.write(order.id, values)
+                    updated += 1
+    if errors:
+        error('missing orders:  %s' % ', '.join(sorted(errors)), verbose=1)
+    print('%5d orders processed\n%5d order steps updated' % (processed, updated))
+
 
 @Command(
         old=('file with older order information', ),
