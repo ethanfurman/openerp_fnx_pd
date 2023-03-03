@@ -108,7 +108,7 @@
                     @allergens $Allergens
                     ~separator
                     ~filter $All_Open @type_open domain="[('state','in',['draft','sequenced','released'])]"
-                    ~filter $In_Progress @type_progress domain="[('state','in',['released','produced'])]"
+                    ~filter $In_Progress @type_progress domain="[('state','in',['sequenced','released','produced'])]"
                     ~filter $Closed @type_closed domain="[('state','in',['complete','cancelled'])]"
                     ~separator
                     ~filter $New @type_draft domain="[('state','=','draft')]"
