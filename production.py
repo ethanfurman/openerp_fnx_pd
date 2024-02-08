@@ -193,17 +193,14 @@ class fnx_pd_order(osv.Model):
         return res
 
     def _get_orders_from_ingredients(self, cr, uid, ids, context=None):
-        _logger.warning('product ids: %r', ids)
         product_product = self
         product_ids = ids
         self = product_product.pool.get('fnx.pd.order')
         # get order ingredient ids that match the product ids
         pd_ingredient = self.pool.get('fnx.pd.ingredient')
         ingredient_ids = pd_ingredient.search(cr, SUPERUSER_ID, [('item_id','in',product_ids)])
-        _logger.warning('ingredient ids: %r', ingredient_ids)
         # get order ids that include the order ingredients
         ids = self.search(cr, SUPERUSER_ID, [('ingredient_ids','in',ingredient_ids)])
-        _logger.warning('order ids: %r', ids)
         return ids
 
 
