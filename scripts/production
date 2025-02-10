@@ -20,12 +20,11 @@ from openerplib.dates import LOCAL_TIME, date_to_str, datetime_to_str
 from pandaemonium import PidLockFile, AlreadyLocked
 from scription import *
 from fislib.schema import F135, F320, F328, F329
-from VSS.constants import IndexEnum, Weekday
-from VSS.BBxXlate.fisData import fisData
-from VSS.utils import fix_date
-from VSS.xl import open_workbook
-from VSS.finance import FederalHoliday
+from fislib.constants import IndexEnum, Weekday, FederalHoliday
+from fislib.BBxXlate.fisData import fisData
+from fislib.utils import fix_date
 from fislib.tools import combine_by_value, Model
+from VSS.xl import open_workbook
 from traceback import format_exception
 from xmlrpclib import Fault
 

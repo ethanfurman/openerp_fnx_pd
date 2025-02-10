@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from VSS.constants import Enum, IntEnum, IndexEnum
+from fislib.constants import Enum, IntEnum, IndexEnum
 
 __all__ =['ProductionState', 'QAll_C', 'BadFormat', 'MissingPartner', 'FISenum', 'F328', 'process_failure_mail']
 
