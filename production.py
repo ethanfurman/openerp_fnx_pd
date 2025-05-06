@@ -5,7 +5,7 @@ from fnx_fs.fields import files
 from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.tools import self_ids
-# from fnx.oe import Proposed
+from VSS.utils import translator
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -192,6 +192,14 @@ class fnx_pd_order(osv.Model):
                 res[record.id] = '%s' % (record.line_id.name, )
         return res
 
+    def _get_markem_printers(self, cr, uid, context=None):
+        context = (context or {}).copy()
+        context['active_test'] = False
+        res = []
+        for markem in self.pool.get('fnx.pd.markem_printer').browse(cr, uid, [(1,'=',1)], context=context):
+            res.append((compress(markem.name), markem.name))
+        return res
+
     def _get_orders_from_ingredients(self, cr, uid, ids, context=None):
         product_product = self
         product_ids = ids
@@ -254,7 +262,8 @@ class fnx_pd_order(osv.Model):
         'ordered_qty': fields.float('Requested Qty', track_visibility='onchange', oldname='qty'),
         'line_id': fields.many2one('fis_integration.production_line', 'Production Line', track_visibility='onchange'),
         'line_id_set': fields.boolean('Line Locked', help='if True, nightly script will not update this field'),
-        'markem': fields.char('Markem line', size=32, readonly=True),
+        # 'markem': fields.selection(string='Markem Printer', selection=_get_markem_printers),
+        'markem': fields.many2one('fnx.pd.markem_printer', string='Markem Printer'),
         'mark_prod_line': fields.function(
             _get_mark_prod_text,
             string='Markem / Production Line',
@@ -436,6 +445,39 @@ class fnx_pd_product_ingredient(osv.Model):
             ),
         }
 
+class markem_printer(osv.Model):
+    "label printers" 
+    _name = 'fnx.pd.markem_printer'
+
+    def _unique_name(self, cr, uid, ids):
+        names = {}
+        for rec in self.browse(cr, SUPERUSER_ID, [(1,'=',1)], context={'active_test':False}):
+            names.setdefault(compress(rec.name), []).append(rec.id)
+        for name, ids in names.items():
+            if len(ids) > 1:
+                return False
+        else:
+            return True
+
+
+    _columns = {
+            'active': fields.boolean('Available for use'),
+            'name': fields.char('Name', size=32),
+            'notes': fields.text('Notes'),
+            }
+
+    _defaults = {
+            'active': True,
+            }
+
+    _constraints = [
+            (_unique_name, "Name already exists", ['name']),
+            ]
+
+    #These must be in sync with the configuration on the Markem Control PC (192.168.11.108)
+    markemprinters = ['Bulk-Line','Tub-Line-1','Zip-Line-2','Zip-Line-3','Triangle-Line',
+     'Enrobing','Panning','Bulk-Line-2','Spare','Roasting','5200-8-41','5200-8-42','5400-8-43']
+
 class production_line(osv.Model):
     "production line"
     _name = 'fis_integration.production_line'
@@ -577,4 +619,10 @@ class pd_order_clean(osv.TransientModel):
                 return False
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
+alphanum = translator(
+        to=' ',
+        keep='01234567890 abcdefghijklmnopqrstuvwxyz',
+        )
+def compress(text):
+    return '_'.join(alphanum(text.lower()).split())
 

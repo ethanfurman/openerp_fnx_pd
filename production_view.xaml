@@ -64,7 +64,7 @@
                                 @allergens
                             ~group
                                 @dept
-                                @markem attrs="{'invisible': [('state','not in',['released','produced'])]}"
+                                @markem
                                 @line_id
                                 @line_id_set groups='fnx_pd.group_fnx_pd_manager' $Lock_Line attrs="{'invisible': [('state','in',['complete','cancelled'])]}"
                         ~notebook
@@ -327,6 +327,8 @@
 
         ~menuitem @Configure #menu_fnx_pd_config parent='menu_fnx_pd_root' sequence='40' groups='group_fnx_pd_user'
 
+        // multi-line
+
         ~record model='ir.ui.view' #fnx_pd_multiline_tree
             @name: fnx_pd_multiline_tree
             @model: fnx.pd.multiline
@@ -363,3 +365,37 @@
 
         ~menuitem $Multilines #menu_item_fnx_pd_multiline parent='menu_fnx_pd_config' sequence='50' action='action_fnx_pd_multiline'
 
+        // markem printers
+
+        ~record model='ir.ui.view' #fnx_pd_markem_printer_tree
+            @name: fnx_pd_markem_printer_tree
+            @model: fnx.pd.markem_printer
+            @priority eval='20'
+            @arch type='xml'
+                ~tree $Markem_Printer
+                    @name
+                    @active
+
+        ~record model='ir.ui.view' #fnx_pd_markem_printer_form
+            @name: fnx_pd_markem_printer_form
+            @model: fnx.pd.markem_printer
+            @priority eval='20'
+            @groups_id eval="[(4, ref('fnx_pd.group_fnx_pd_user'))]"
+            @arch type='xml'
+                ~form $Markem_Printer version='7.0'
+                    ~group
+                        ~group
+                            @name
+                        ~group
+                            @active
+                    ~label for='notes' $Notes
+                    @notes
+
+        ~record model='ir.actions.act_window' #action_fnx_pd_markem_printer
+            @name: Markem Printer
+            @res_model: fnx.pd.markem_printer
+            @view_type: form
+            @view_id ref='fnx_pd_markem_printer_tree'
+            @view_mode: tree,form
+
+        ~menuitem $Markem_Printers #menu_item_fnx_pd_markem_printer parent='menu_fnx_pd_config' sequence='60' action='action_fnx_pd_markem_printer'
