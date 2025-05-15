@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 
+from base64 import b64decode
 from collections import defaultdict
+from fnx import date
 from fnx_fs.fields import files
-from openerp import SUPERUSER_ID
+from openerp import SUPERUSER_ID, VAR_DIR
+from openerp.exceptions import ERPError
 from openerp.osv import fields, osv
-from openerp.tools import self_ids
+from openerp.tools import self_ids, DEFAULT_SERVER_DATE_FORMAT
 from VSS.utils import translator
+from VSS.xl import open_workbook
+from VSS.xl.xlrd import XL_CELL_NUMBER, XL_CELL_TEXT
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -444,6 +449,102 @@ class fnx_pd_product_ingredient(osv.Model):
             digits=(16,2),
             ),
         }
+
+class fnx_pd_schedule(osv.Model):
+    """
+    imported spreadsheets for markem printers
+    """
+    _name = 'fnx.pd.markem_schedule'
+    _order = 'date desc'
+    _inherit = 'fnx_fs.fs'
+    _rec_name = 'date'
+
+    _fnxfs_path = 'fnx_pd/markem_schedule'
+    _fnxfs_path_fields = ['date']
+    _data_path = Path(VAR_DIR) / 'fnx_pd'
+
+    def _auto_init(self, cr, context=None):
+        res = super(fnx_pd_schedule, self)._auto_init(cr, context)
+        if not self._data_path.exists():
+            self._data_path.mkdir()
+        return res
+
+    def _get_data(self, cr, uid, ids, field_name, args, context=None):
+        res = {}
+        for rec in self.browse(cr, uid, ids, context=context):
+            data = open(self._data_path / rec.tsv_file, 'r').read()
+            res[rec.id] = data
+        return res
+
+    _columns = {
+        'date': fields.date('Target date', required=True),
+        'tsv_file': fields.char(string='Final file', size=128, readonly=True, help='Merged data file for each target date'),
+        'new_file': fields.binary('New scheduling xls file'),
+        'src_files': files('source', style='static_list', string='Source files', help='Source .xls files'),
+        'data': fields.function(_get_data, type='text', string='Tab-delimited data'),
+        }
+
+    def merge_schedules(self, cr, uid, src_path, dest):
+        # get markem printers
+        mp = [
+                r.name.upper()
+                for r in self.pool.get('fnx.pd.markem_printer').browse(cr, uid, [(1,'=',1)])
+                ]
+        # process files
+        data = []
+        for src in src_path.listdir():
+            with open_workbook(src_path/src, ragged_rows=True) as book:
+                sheet = book[0]
+                skip = True
+                for row in sheet:
+                    line = []
+                    for cell in row:
+                        value = cell.value
+                        if skip:
+                            if cell.ctype == XL_CELL_TEXT and value in mp:
+                                skip = False
+                            else:
+                                continue
+                        if cell.ctype == XL_CELL_NUMBER:
+                            value = '%06d' % int(value)
+                        line.append(value)
+                    while line and line[-1] == '':
+                        line.pop()
+                    if line:
+                        data.append('\t'.join(line))
+        data = '\n'.join(data)
+        with open(self._data_path/dest, 'w') as d:
+            d.write(data)
+        return data
+
+    def create(self, cr, uid, values, context=None):
+        file_date = date(values['date'], DEFAULT_SERVER_DATE_FORMAT)
+        source_path = self._fnxfs_root / self._fnxfs_path / 'source' / file_date.strftime('%Y-%m-%d')
+        if not source_path.exists():
+            source_path.mkdir()
+        values['tsv_file'] = file_date.strftime('_pdreq_for_%Y%m%d')
+        new_file_data = b64decode(values.pop('new_file'))
+        new_file_name = file_date.strftime('%Y-%m-%d_01.xls')
+        with open(source_path / new_file_name, 'w') as s:
+            s.write(new_file_data)
+        self.merge_schedules(cr, uid, source_path, values['tsv_file'])
+        return super(fnx_pd_schedule, self).create(cr, uid, values, context=context)
+
+    def write(self, cr, uid, ids, values, context=None):
+        if isinstance(ids, (int, long)):
+            ids = [ids]
+        if len(ids) > 1:
+            raise ERPError('too many records', 'can only modify one markem schedule at a time')
+        schedule = self.browse(cr, uid, ids[0], context=context)
+        file_date = date(schedule.date, DEFAULT_SERVER_DATE_FORMAT)
+        source_path = self._fnxfs_root / self._fnxfs_path / 'source' / file_date.strftime('%Y-%m-%d')
+        seq = len(source_path.listdir()) + 1
+        new_file_data = b64decode(values.pop('new_file'))
+        new_file_name = file_date.strftime('%Y-%m-%d_%%02d.xls') % seq
+        with open(source_path / new_file_name, 'w') as s:
+            s.write(new_file_data)
+        self.merge_schedules(cr, uid, source_path, schedule.tsv_file)
+        return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context=context)
 
 class markem_printer(osv.Model):
     "label printers" 

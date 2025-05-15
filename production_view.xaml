@@ -241,6 +241,44 @@
 
         ~menuitem name='Lines' #menu_fnx_pd_production_lines parent='menu_fnx_pd_orders' sequence='30' action='action_fnx_pd_production_line' groups='fnx_pd.group_fnx_pd_user'
 
+        // Packing Schedules
+
+        ~record model='ir.ui.view' #fnx_pd_markem_schedule_tree
+            @name: Markem Schedules
+            @model: fnx.pd.markem_schedule
+            @arch type='xml'
+                ~tree $Markem_Schedules
+                    @date
+                    @tsv_file
+
+        ~record model='ir.ui.view' #fnx_pd_markem_schedule_form
+            @name: Markem Schedule
+            @model: fnx.pd.markem_schedule
+            @arch type='xml'
+                ~form $Markem_Schedule version='7.0'
+                    @id invisible='1'
+                    ~group
+                        ~group
+                            @date attrs="{'readonly':[('id','!=',False)]}"
+                        ~group
+                            @tsv_file
+                    ~group .oe_edit_only
+                        @new_file required='1'
+                    ~label for='src_files' $Source_Files
+                    @src_files
+                    ~hr
+                    ~label for='data' $Schedule
+                    @data
+
+        ~record model='ir.actions.act_window' #fnx_pd_markem_schedule_action
+            @name: Markem Schedules
+            @res_model: fnx.pd.markem_schedule
+            @view_type: form
+            @view_id ref='fnx_pd_markem_schedule_tree'
+            @view_mode: tree,form
+
+        ~menuitem $Markem_Schedules #menu_fnx_pd_markem_schedule parent='menu_fnx_pd_orders' sequence='40' action='fnx_pd_markem_schedule_action' groups='fnx_pd.group_fnx_pd_user'
+
         // Operator Menu
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
