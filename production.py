@@ -482,16 +482,29 @@ class fnx_pd_schedule(osv.Model):
         'new_file': fields.binary('New scheduling xls file'),
         'src_files': files('source', style='static_list', string='Source files', help='Source .xls files'),
         'data': fields.function(_get_data, type='text', string='Tab-delimited data'),
+        'failed': fields.text('Mismatched item/order pairs'),
         }
 
-    def merge_schedules(self, cr, uid, src_path, dest):
+    # checkmark u'\u2713'
+    # crossed-out u'\u274c'
+
+    def _is_valid_item_order(self, cr, uid, item_no, order_no, context=None):
+        """
+        check that order exists and is for given item
+        """
+        fpo = self.pool.get('fnx.pd.order')
+        order = fpo.browse(cr, uid, [('order_no','=',order_no)], context=context)
+        return order and order[0].item_id.xml_id == item_no
+
+    def merge_schedules(self, cr, uid, src_path, dest, context=None):
         # get markem printers
         mp = [
                 r.name.upper()
                 for r in self.pool.get('fnx.pd.markem_printer').browse(cr, uid, [(1,'=',1)])
                 ]
         # process files
-        data = []
+        good_data = {}
+        failed_data = {}
         for src in src_path.listdir():
             with open_workbook(src_path/src, ragged_rows=True) as book:
                 sheet = book[0]
@@ -500,22 +513,48 @@ class fnx_pd_schedule(osv.Model):
                     line = []
                     for cell in row:
                         value = cell.value
+                        if cell.ctype == XL_CELL_TEXT:
+                            value = value.upper()
                         if skip:
-                            if cell.ctype == XL_CELL_TEXT and value in mp:
-                                skip = False
-                            else:
+                            if value not in mp:
                                 continue
+                            skip = False
+                        if value in mp:
+                            markem = value.upper()
+                            continue
                         if cell.ctype == XL_CELL_NUMBER:
                             value = '%06d' % int(value)
                         line.append(value)
-                    while line and line[-1] == '':
-                        line.pop()
-                    if line:
-                        data.append('\t'.join(line))
-        data = '\n'.join(data)
+                    if not line:
+                        continue
+                    elif len(line) == 2:
+                        # we have a line that should be product, order
+                        # ensure item matches order
+                        line = tuple(line)
+                        item_no, order_no = line
+                        if self._is_valid_item_order(cr, uid, item_no, order_no, context=context):
+                            good_data.setdefault(markem, set()).add(line)
+                        else:
+                            failed_data.setdefault(markem, set()).add(line)
+                    else:
+                        # something's wrong, should be two items
+                        failed_data.setdefault(markem, set()).add(line)
+        # all files processed
+        data = []
+        for markem, info in good_data.items():
+            data.append(markem)
+            for line in info:
+                data.append('\t'.join(line))
+            data.append('')
         with open(self._data_path/dest, 'w') as d:
-            d.write(data)
-        return data
+            d.write('\n'.join(data))
+        bad_data = []
+        for markem, info in failed_data.items():
+            bad_data.append(markem)
+            for line in info:
+                bad_data.append('\t'.join(line))
+            bad_data.append('')
+        return '\n'.join(bad_data)
 
     def create(self, cr, uid, values, context=None):
         file_date = date(values['date'], DEFAULT_SERVER_DATE_FORMAT)
@@ -527,7 +566,7 @@ class fnx_pd_schedule(osv.Model):
         new_file_name = file_date.strftime('%Y-%m-%d_01.xls')
         with open(source_path / new_file_name, 'w') as s:
             s.write(new_file_data)
-        self.merge_schedules(cr, uid, source_path, values['tsv_file'])
+        values['failed'] = self.merge_schedules(cr, uid, source_path, values['tsv_file'], context=None)
         return super(fnx_pd_schedule, self).create(cr, uid, values, context=context)
 
     def write(self, cr, uid, ids, values, context=None):
@@ -543,12 +582,13 @@ class fnx_pd_schedule(osv.Model):
         new_file_name = file_date.strftime('%Y-%m-%d_%%02d.xls') % seq
         with open(source_path / new_file_name, 'w') as s:
             s.write(new_file_data)
-        self.merge_schedules(cr, uid, source_path, schedule.tsv_file)
+        values['failed'] = self.merge_schedules(cr, uid, source_path, schedule.tsv_file, context=None)
         return super(fnx_pd_schedule, self).write(cr, uid, ids, values, context=context)
 
 class markem_printer(osv.Model):
     "label printers" 
     _name = 'fnx.pd.markem_printer'
+    _order = 'name'
 
     def _unique_name(self, cr, uid, ids):
         names = {}

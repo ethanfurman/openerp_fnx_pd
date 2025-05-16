@@ -267,8 +267,11 @@
                     ~label for='src_files' $Source_Files
                     @src_files
                     ~hr
-                    ~label for='data' $Schedule
-                    @data
+                    ~group
+                        ~group $Scheduled
+                            @data nolabel='1'
+                        ~group $Mismatched
+                            @failed nolabel='1'
 
         ~record model='ir.actions.act_window' #fnx_pd_markem_schedule_action
             @name: Markem Schedules
