@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from antipathy import Path
 from base64 import b64decode
 from collections import defaultdict
 from fnx import date
