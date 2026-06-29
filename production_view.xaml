@@ -289,7 +289,7 @@
             @url: http://192.168.11.16:8000/mkPngXfStatus.htm
             @target: new
 
-        ~menuitem @Markem $Markem_Images #menu_product_markem_labels parent='menu_fnx_pd_orders' sequence='50' action='action_product_markem_labels' groups='fis_integration.purchase_cost'
+        ~menuitem name='Markem Images' #menu_product_markem_labels parent='menu_fnx_pd_orders' sequence='50' action='action_product_markem_labels' groups='fis_integration.purchase_cost'
 
         // Operator Menu
 
