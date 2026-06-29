@@ -282,6 +282,15 @@
 
         ~menuitem $Markem_Schedules #menu_fnx_pd_markem_schedule parent='menu_fnx_pd_orders' sequence='40' action='fnx_pd_markem_schedule_action' groups='fnx_pd.group_fnx_pd_user'
 
+        // Markem Labels
+
+        ~record model='ir.actions.act_url' #action_product_markem_labels
+            @name: Markem Images
+            @url: http://192.168.11.16:8000/mkPngXfStatus.htm
+            @target: new
+
+        ~menuitem @Markem $Markem_Images #menu_product_markem_labels parent='menu_fnx_pd_orders' sequence='50' action='action_product_markem_labels' groups='fis_integration.purchase_cost'
+
         // Operator Menu
 
         ~menuitem @Operator #menu_fnx_pd_operator parent='menu_fnx_pd_root' sequence='30'
