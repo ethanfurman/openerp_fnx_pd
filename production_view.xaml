@@ -286,7 +286,7 @@
 
         ~record model='ir.actions.act_url' #action_product_markem_labels
             @name: Markem Images
-            @url: http://192.168.11.16:8000/mkPngXfStatus.htm
+            @url: /fis/markem/status
             @target: new
 
         ~menuitem name='Markem Images' #menu_product_markem_labels parent='menu_fnx_pd_orders' sequence='50' action='action_product_markem_labels' groups='fis_integration.purchase_cost'
