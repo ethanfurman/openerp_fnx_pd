@@ -19,6 +19,8 @@ class MarkemStatus(http.Controller):
 
     def _fix_url(self, matches):
         for t in matches.groups():
+            if t.startswith('vnc://'):
+                return t
             if t.startswith(markem_base):
                 t = t[len(markem_base):]
             # t = '"http://localhost:8069/fis/markem/status/%s"' % t
