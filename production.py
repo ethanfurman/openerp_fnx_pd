@@ -329,55 +329,19 @@ class fnx_pd_order(osv.Model):
 
     def create(self, cr, uid, values, context=None):
         'create production order, attach to appropriate production line and item'
-        follower_ids = values.pop('follower_ids', [])
         product_product = self.pool.get('product.product')
-        res_users = self.pool.get('res.users')
         item = product_product.browse(cr, uid, values['item_id'], context=context)
-        product_follower_ids = [p.id for p in (item.message_follower_ids or [])]
-        follower_ids.extend(
-                res_users.search(
-                    cr, uid,
-                    [('partner_id','in',product_follower_ids),('id','!=',1)],
-                    context=context),
-                )
-        values['message_follower_user_ids'] = follower_ids
+        # item_follower_ids = [p.id for p in (item.message_follower_ids or [])]
         values['state'] = values.get('state', 'draft')
         order_id = super(fnx_pd_order, self).create(cr, uid, values, context=context)
+        item.message_post(
+                type='notification',
+                body='---\nmodel:fnx.pd.order\nid:%s\n---\nProduction order [a]%s[/a] created.' % (order_id, values['order_no']),
+                # body='---\nmodel:fnx.pd.order\nid:%s\n---\nIt can be tracked [a]here[/a].' % order_id,
+                # subject="Item %s: %s" % (item.xml_id, item.name),
+                # partner_ids=item_follower_ids,
+                )
         return order_id
-
-    # def write(self, cr, uid, ids, values, context=None):
-    #     'if needed: update status, change/remove order to/from producuction line'
-    #     if isinstance(ids, (int, long)):
-    #         ids = [ids]
-    #     if not ids:
-    #         return super(fnx_pd_order, self).write(cr, uid, ids, values, context=context)
-    #     # nightly = (context or {}).get('fis-updates', False)
-    #     for record in self.browse(cr, SUPERUSER_ID, ids, context=context):
-    #         final_record = Proposed(self, cr, values, record, context)
-    #         vals = values.copy()
-    #
-    #         # if nightly:
-    #         #     if 'line_id' in vals and final_record.line_id_set:
-    #         #         del vals['line_id']
-    #         #         final_record.line_id = record.line_id
-    #         #     if 'schedule_date' in vals and final_record.schedule_date_set:
-    #         #         del vals['schedule_date']
-    #         #         final_record.schedule_date = record.schedule_date
-    #         # else:
-    #         #     if vals.get('line_id') and not final_record.line_id_set:
-    #         #         vals['line_id_set'] = final_record.line_id_set = True
-    #         #     if vals.get('schedule_date') and not final_record.schedule_date_set:
-    #         #         vals['schedule_date_set'] = final_record.schedule_date_set = True
-    #         # if final_record.state == 'draft':
-    #         #     if final_record.confirmed:   # or final_record.schedule_date_set:
-    #         #         vals['state'] = final_record.state = 'sequenced'
-    #         try:
-    #             if not super(fnx_pd_order, self).write(cr, uid, record.id, vals, context=context):
-    #                 return False
-    #         except Exception:
-    #             _logger.error('failed trying to write id %s with %s', record.id, vals)
-    #             raise
-    #     return True
 
     def pd_state(self, cr, uid, ids, context):
         state = context.pop('new_state')
